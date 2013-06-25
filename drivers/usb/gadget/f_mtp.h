@@ -64,6 +64,7 @@ struct usb_container_header {
 
 struct read_send_info {
 	int	Fd;/* Media File fd */
+	loff_t  offset;/*offset in file for start of transfer */
 	uint64_t Length;/* the valid size, in BYTES, of the container  */
 	uint16_t Code;/* Operation code, response code, or Event code */
 	uint32_t TransactionID;/* host generated number */

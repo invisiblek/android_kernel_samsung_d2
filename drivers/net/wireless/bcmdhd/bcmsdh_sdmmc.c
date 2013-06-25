@@ -1092,7 +1092,7 @@ sdioh_request_packet(sdioh_info_t *sd, uint fix_inc, uint write, uint func,
 			 */
 			if (write == 0 || pkt_len < 32)
 				pkt_len = (pkt_len + 3) & 0xFFFFFFFC;
-			else if (pkt_len % blk_size)
+			else if ((pkt_len > blk_size) && (pkt_len % blk_size))
 				pkt_len += blk_size - (pkt_len % blk_size);
 
 #if defined(CUSTOMER_HW4) && defined(USE_DYNAMIC_F2_BLKSIZE)

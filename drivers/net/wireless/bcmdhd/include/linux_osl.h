@@ -264,6 +264,7 @@ extern int osl_error(int bcmerror);
 #define	PKTLEN(osh, skb)		(((struct sk_buff*)(skb))->len)
 #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))
 #define PKTTAILROOM(osh, skb) ((((struct sk_buff*)(skb))->end)-(((struct sk_buff*)(skb))->tail))
+#define PKTPADTAILROOM(osh, skb, padlen)		skb_pad((struct sk_buff*)(skb), (padlen))
 #define	PKTNEXT(osh, skb)		(((struct sk_buff*)(skb))->next)
 #define	PKTSETNEXT(osh, skb, x)		(((struct sk_buff*)(skb))->next = (struct sk_buff*)(x))
 #define	PKTSETLEN(osh, skb, len)	__skb_trim((struct sk_buff*)(skb), (len))
