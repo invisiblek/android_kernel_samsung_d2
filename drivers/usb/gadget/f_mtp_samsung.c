@@ -142,8 +142,7 @@ struct mtpg_dev {
 	struct workqueue_struct *wq;
 	struct work_struct read_send_work;
 	struct file *read_send_file;
-	
-	loff_t read_send_offset;
+
 	int64_t read_send_length;
 
 	uint16_t read_send_cmd;
@@ -450,7 +449,7 @@ static int mtp_send_signal(int value)
 	rcu_read_lock();
 
 	if  (!current->nsproxy) {
-		printk(KERN_DEBUG "[%s] process has gone\n", __func__);
+		printk(KERN_DEBUG "process has gone\n");
 		rcu_read_unlock();
 		return -ENODEV;
 	}
@@ -458,7 +457,7 @@ static int mtp_send_signal(int value)
 	t = pid_task(find_vpid(mtp_pid), PIDTYPE_PID);
 
 	if (t == NULL) {
-		printk(KERN_DEBUG "[%s] no such pid\n", __func__);
+		printk(KERN_DEBUG "no such pid\n");
 		rcu_read_unlock();
 		return -ENODEV;
 	}
@@ -490,7 +489,6 @@ static int mtpg_open(struct inode *ip, struct file *fp)
 	DEBUG_MTPB("[%s] mtpg_open and clearing the error = 0\n", __func__);
 
 	the_mtpg->error = 0;
-	the_mtpg->read_send_offset = 0;
 
 	return 0;
 }
@@ -720,6 +718,11 @@ static ssize_t mtpg_write(struct file *fp, const char __user *buf,
 	return r;
 }
 
+static void interrupt_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	printk(KERN_DEBUG "Finished Writing Interrupt Data\n");
+}
+
 static ssize_t interrupt_write(struct file *fd,
 			const char __user *buf, size_t count)
 {
@@ -729,10 +732,8 @@ static ssize_t interrupt_write(struct file *fd,
 
 	DEBUG_MTPB("[%s] \tline = [%d]\n", __func__, __LINE__);
 
-	if (count > MTPG_INTR_BUFFER_SIZE) {
-			printk(KERN_DEBUG "[%s]\tline = [%d]\n", __func__, __LINE__);
+	if (count > MTPG_INTR_BUFFER_SIZE)
 			return -EINVAL;
-	}
 
 	ret = wait_event_interruptible_timeout(dev->intr_wq,
 		(req = mtpg_req_get(dev, &dev->intr_idle)),
@@ -772,7 +773,7 @@ static void read_send_work(struct work_struct *work)
 	struct usb_request *req = 0;
 	struct usb_container_header *hdr;
 	struct file *file;
-	loff_t offset;
+	loff_t file_pos = 0;
 	int64_t count = 0;
 	int xfer = 0;
 	int ret = -1;
@@ -783,13 +784,12 @@ static void read_send_work(struct work_struct *work)
 	/* read our parameters */
 	smp_rmb();
 	file = dev->read_send_file;
-	offset = dev->read_send_offset;
 	count = dev->read_send_length;
 	hdr_length = sizeof(struct usb_container_header);
 	count += hdr_length;
 
-	printk(KERN_DEBUG "[%s:%d] Newoffset=[%lld]\t leth+hder=[%lld]\n",
-					 __func__, __LINE__, offset, count);
+	printk(KERN_DEBUG "[%s:%d] offset=[%lld]\t leth+hder=[%lld]\n",
+					 __func__, __LINE__, file_pos, count);
 
 	/* Zero Length Packet should be sent if the last trasfer
 	 * size is equals to the max packet size.
@@ -835,11 +835,9 @@ static void read_send_work(struct work_struct *work)
 		}
 
 		ret = vfs_read(file, req->buf + hdr_length,
-					xfer - hdr_length, &offset);
+					xfer - hdr_length, &file_pos);
 		if (ret < 0 || !req) {
 			r = ret;
-			printk(KERN_ERR "[%s]\t%d ret = %d\n",
-							__func__, __LINE__, r);
 			break;
 		}
 		xfer = ret + hdr_length;
@@ -1036,8 +1034,6 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 
 		if (copy_from_user(&info, (void __user *)arg, sizeof(info))) {
 			status = -EFAULT;
-			printk(KERN_ERR "[%s] error line=[%d] \n",
-							__func__, __LINE__);
 			goto exit;
 		}
 
@@ -1050,7 +1046,6 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 		}
 
 		dev->read_send_file = file;
-		dev->read_send_offset = info.offset;
 		dev->read_send_length = info.Length;
 		smp_wmb();
 
@@ -1069,8 +1064,6 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 	}
 	default:
 		status = -ENOTTY;
-		printk(KERN_ERR "[%s] line=[%d] status = %d \n",
-							__func__, __LINE__,status);
 	}
 exit:
 	return status;
