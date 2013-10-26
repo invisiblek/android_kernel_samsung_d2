@@ -1,5 +1,9 @@
 menu "Device Drivers"
 
+config EHRPDFIX
+       tristate
+       default m
+
 source "drivers/base/Kconfig"
 
 source "drivers/connector/Kconfig"
