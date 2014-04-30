@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -61,6 +61,3 @@ int32_t msm_camera_eeprom_read_tbl(struct msm_camera_eeprom_client *ectrl,
 	struct msm_camera_eeprom_read_t *read_tbl, uint16_t tbl_size);
 int32_t msm_camera_eeprom_get_data(struct msm_camera_eeprom_client *ectrl,
 	struct sensor_eeprom_data_t *edata);
-
-
-

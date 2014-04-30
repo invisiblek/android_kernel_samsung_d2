@@ -27,9 +27,6 @@
  *
  */
 
-#include "mipi_dsi.h"
-#include <linux/wakelock.h>
-
 #ifndef MIPI_SAMSUNG_OLED_H
 #define MIPI_SAMSUNG_OLED_H
 
@@ -43,29 +40,21 @@
 #include "smart_mtp_s6e8aa0x01.h"
 #elif defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
 #include "smart_mtp_s6e39a0x02.h"
-#elif defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
-#include "smart_mtp_ea8868.h"
 #endif
 
 #define SmartDimming_useSampleValue
 #define SmartDimming_CANDELA_UPPER_LIMIT (300)
 #define MTP_DATA_SIZE (24)
 #define MTP_DATA_SIZE_S6E63M0 (21)
-#define MTP_DATA_SIZE_EA8868 (21)
 #define ELVSS_DATA_SIZE (24)
 #define MTP_REGISTER	(0xD3)
 #define ELVSS_REGISTER	 (0xD4)
-#if defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
-#define SmartDimming_GammaUpdate_Pos (1)
-#else
 #define SmartDimming_GammaUpdate_Pos (2)
-#endif
 #define DIMMING_BL (20)
 
 #if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT) ||\
 	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT) ||\
-	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT) || \
-	defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
+	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
 #define USE_READ_ID
 #endif
 enum mipi_samsung_cmd_list {
@@ -94,8 +83,8 @@ enum gamma_mode_list {
 };
 
 enum {
-	MIPI_RESUME_STATE,
 	MIPI_SUSPEND_STATE,
+	MIPI_RESUME_STATE,
 };
 
 struct cmd_set {
@@ -107,6 +96,42 @@ struct gamma_table {
 	char *table;
 	int table_cnt;
 	int data_size;
+};
+
+struct display_status {
+	unsigned char acl_on;
+	unsigned char gamma_mode; /* 1: 1.9 gamma, 0: 2.2 gamma */
+	unsigned char is_smart_dim_loaded;
+	unsigned char is_elvss_loaded;
+	unsigned char auto_brightness;
+};
+
+#if defined(CONFIG_MIPI_SAMSUNG_ESD_REFRESH)
+extern void set_esd_refresh(boolean stat);
+#endif
+
+struct dsi_cmd_desc_LCD {
+	int lux;
+	char strID[8];
+	struct dsi_cmd_desc *cmd;
+};
+
+
+struct mipi_samsung_driver_data {
+	struct dsi_buf samsung_tx_buf;
+	struct dsi_buf samsung_rx_buf;
+	struct msm_panel_common_pdata *mipi_samsung_disp_pdata;
+	struct mipi_panel_data *mpd;
+	struct display_status dstat;
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+	struct early_suspend early_suspend;
+#endif
+#if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_LCD_CLASS_DEVICE)
+	struct platform_device *msm_pdev;
+#endif
+#if defined(CONFIG_MIPI_SAMSUNG_ESD_REFRESH)
+	boolean esd_refresh;
+#endif
 };
 
 struct mipi_panel_data {
@@ -145,11 +170,11 @@ struct mipi_panel_data {
 	int *lux_table;
 	int lux_table_max_cnt;
 	struct SMART_DIM smart_s6e8aa0x01;
+	struct cmd_set combined_ctrl;
 #endif
 #if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT) ||\
 	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT) ||\
-	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT) || \
-	defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
+	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
 	unsigned int manufacture_id;
 #endif
 #if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT)
@@ -158,93 +183,37 @@ struct mipi_panel_data {
 #if  defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
 	struct SMART_DIM smart_s6e39a0x02;
 #endif
-#if defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
-	struct SMART_DIM smart_ea8868;
-#endif
-
 	int (*set_gamma)(int bl_level, enum gamma_mode_list gamma_mode);
 	int (*set_acl)(int bl_level);
 	int (*set_elvss)(int bl_level);
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT) \
-	|| defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT)
-	int (*prepare_brightness_control_cmd_array)(int lcd_type, int bl_level);
-	struct cmd_set combined_ctrl;
-#endif
 #ifdef CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT
 	int (*set_elvss_4_8)(int bl_level);
+	int (*prepare_brightness_control_cmd_array)(int lcd_type, int bl_level);
 	void  (*prepare_fast_cmd_array)(int lcd_type);
 
 #endif
 	struct mipi_samsung_driver_data *msd;
-	struct workqueue_struct *esd_workqueue;
-	struct delayed_work esd_work;
-	struct wake_lock esd_wake_lock;
 };
-struct display_status {
-	unsigned char acl_on;
-	unsigned char gamma_mode; /* 1: 1.9 gamma, 0: 2.2 gamma */
-	unsigned char is_smart_dim_loaded;
-	unsigned char is_elvss_loaded;
-	unsigned char auto_brightness;
-};
-struct mipi_samsung_driver_data {
-	struct dsi_buf samsung_tx_buf;
-	struct dsi_buf samsung_rx_buf;
-	struct msm_panel_common_pdata *mipi_samsung_disp_pdata;
-	struct mipi_panel_data *mpd;
-	struct display_status dstat;
-#if defined(CONFIG_HAS_EARLYSUSPEND)
-	struct early_suspend early_suspend;
-#endif
-#if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_LCD_CLASS_DEVICE)
-	struct platform_device *msm_pdev;
-#endif
-#if defined(CONFIG_MIPI_SAMSUNG_ESD_REFRESH)
-	boolean esd_refresh;
-#endif
-};
-#if defined(CONFIG_MIPI_SAMSUNG_ESD_REFRESH)
-extern void set_esd_refresh(boolean stat);
-#endif
 
-struct dsi_cmd_desc_LCD {
-	int lux;
-	char strID[8];
-	struct dsi_cmd_desc *cmd;
-};
 int mipi_samsung_device_register(struct msm_panel_info *pinfo,
 					u32 channel, u32 panel,
 					struct mipi_panel_data *mpd);
 
 #if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT) ||\
 	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT) ||\
-	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT) ||\
-	defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
+	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT)
 
 void reset_gamma_level(void);
 unsigned char bypass_LCD_Id(void);
 #endif
 
-#if defined(CONFIG_FB_MSM_MIPI_MAGNA_OLED_VIDEO_WVGA_PT)
-int get_gamma_lux(void);
-#endif
-
 #if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT)
-extern u8 mtp_read_data[];
-bool Is_4_8LCD_bypass(void);
-bool Is_4_65LCD_bypass(void);
-#endif
-
-#if defined(CONFIG_MACH_APEXQ)
-extern int poweroff_charging;
+	/* [junesok] This was originally defined in samsung_cmc624.c */
+/*extern u8 mtp_read_data[];
+*/
 #endif
 
 #if defined(CONFIG_SAMSUNG_CMC624)
 extern int cmc_fast_reset;
-#endif
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT)
-int mipi_dsi_cmds_rx_lp(struct msm_fb_data_type *mfd,
-		struct dsi_buf *tp, struct dsi_buf *rp,
-		char *cmds, int rlen);
 #endif
 #endif  /* MIPI_SAMSUNG_OLED_H */

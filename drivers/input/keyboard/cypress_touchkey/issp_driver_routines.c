@@ -30,7 +30,8 @@
 #include <linux/regulator/machine.h>
 #include <linux/module.h>
 #include <linux/ethtool.h>
-#include <mach/msm8960-gpio.h>
+#include <mach/msm8930-gpio.h>
+#include <linux/gpio.h>
 
 #include "issp_defs.h"
 #include "issp_errors.h"
@@ -38,23 +39,20 @@
 #include "issp_extern.h"
 #define _CYPRESS_TKEY_FW_H
 #include "cypress_tkey_fw.h"
-
-#define SECURITY_DATA	0x00
+#include <linux/i2c/cypress_touchkey_234.h>
+#define SECURITY_DATA	0xFF
 
 #define SCLK_PIN    0x20   /* p2_5 */
 #define SDATA_PIN   0x08   /* p2_3 */
 #define XRES_PIN    0x10   /* p1_5 */
 #define TARGET_VDD  0x08   /* p1_3 */
-
-void InitTargetTestData(unsigned char bBlockNum, unsigned char bBankNum)
-{
-    /* create unique data for each block */
-	int dataNum = 0;
-	for (dataNum = 0; dataNum < TARGET_DATABUFF_LEN; dataNum++) {
-		abTargetDataOUT[dataNum] =
-		    firmware_data[bBlockNum * TARGET_DATABUFF_LEN + dataNum];
-	}
-}
+#if defined(CONFIG_MACH_SERRANO)
+#define GPIO_TOUCHKEY_SDA	GPIO_TOUCHKEY_I2C_SDA
+#define GPIO_TOUCHKEY_SCL	GPIO_TOUCHKEY_I2C_SCL
+#else
+#define GPIO_TOUCHKEY_SDA	GPIO_TKEY_I2C_SDA
+#define GPIO_TOUCHKEY_SCL	GPIO_TKEY_I2C_SCL
+#endif
 
  /*============================================================================
  LoadArrayWithSecurityData()
@@ -107,7 +105,8 @@ void Delay(unsigned int n)
  The demo does it this way because there is no comm link to get data.
  ****************************************************************************
 */
-void LoadProgramData(unsigned char bBankNum, unsigned char bBlockNum)
+
+void LoadProgramData(unsigned char bBlockNum, unsigned char bBankNum)
 {
  /*   >>> The following call is for demo use only. <<<
      Function InitTargetTestData fills buffer for demo
@@ -408,203 +407,7 @@ void SetTargetVDDStrong(void)
  Provide power to the target PSoC's Vdd pin through a GPIO.
  ****************************************************************************
 */
-#ifdef CONFIG_KEYBOARD_CYPRESS_TOUCH_236
-static void cypress_power_onoff(int onoff)
-{
-	int ret, rc;
-	static struct regulator *reg_l29, *reg_l10;
 
-	if (!reg_l29) {
-		reg_l29 = regulator_get(NULL, "8921_l29");
-
-		if (IS_ERR(reg_l29)) {
-			pr_err("could not get 8921_l29, rc = %ld\n",
-				PTR_ERR(reg_l29));
-			return;
-		}
-		ret = regulator_set_voltage(reg_l29, 1800000, 1800000);
-	}
-
-	if (!reg_l10) {
-		reg_l10 = regulator_get(NULL, "8921_l10");
-		ret = regulator_set_voltage(reg_l10, 3000000, 3000000);
-
-		if (IS_ERR(reg_l10)) {
-			pr_err("could not get 8921_l10, rc = %ld\n",
-				PTR_ERR(reg_l10));
-			return;
-		}
-	}
-
-	if (onoff) {
-		ret = regulator_enable(reg_l29);
-		rc =  regulator_enable(reg_l10);
-		if (ret) {
-			pr_err("enable l29failed, rc=%d\n", ret);
-			return;
-		}
-		if (rc) {
-			pr_err("enable l10 failed, rc=%d\n", ret);
-			return;
-		}
-		pr_info("cypress_power_on is finished.\n");
-	} else {
-		ret = regulator_disable(reg_l29);
-		rc =  regulator_disable(reg_l10);
-		if (ret) {
-			pr_err("disable l29 failed, rc=%d\n", ret);
-			return;
-		}
-		if (rc) {
-			pr_err("enable l29failed, rc=%d\n", ret);
-			return;
-		}
-		pr_info("cypress_power_off is finished.\n");
-	}
-}
-
-#else
-
-#if defined(CONFIG_MACH_EXPRESS)
-static void cypress_power_onoff(int onoff)
-{
-	int ret;
-	static struct regulator *reg_l17;
-	static struct regulator *reg_lvs6;
-	static struct regulator *reg_l29;
-
-	if (system_rev < BOARD_REV06) {
-		if (!reg_lvs6) {
-			reg_lvs6 = regulator_get(NULL, "8921_lvs6");
-			if (IS_ERR(reg_lvs6)) {
-				pr_err("could not get 8921_lvs6, ret = %ld\n",
-					PTR_ERR(reg_lvs6));
-				return;
-			}
-		}
-
-		if (onoff) {
-			ret = regulator_enable(reg_lvs6);
-			if (ret) {
-				pr_err("enable lvs6 failed, ret=%d\n", ret);
-				return;
-			}
-			pr_info("cypress_1.8V on is finished.\n");
-		} else {
-			ret = regulator_disable(reg_lvs6);
-			if (ret) {
-				pr_err("disable lvs6 failed, ret=%d\n", ret);
-				return;
-			}
-			pr_info("cypress_1.8V off is finished.\n");
-		}
-
-		if (!reg_l17) {
-			reg_l17 = regulator_get(NULL, "8921_l17");
-			if (IS_ERR(reg_l17)) {
-				pr_err("could not get 8921_l17, ret = %ld\n",
-					PTR_ERR(reg_l17));
-				return;
-			}
-
-			ret = regulator_set_voltage(reg_l17, 3300000, 3300000);
-			if (ret) {
-				pr_err("%s: unable to set ldo17 voltage to 3.3V\n",
-					__func__);
-				return;
-			}
-		}
-
-		if (onoff) {
-			ret = regulator_enable(reg_l17);
-			if (ret) {
-				pr_err("enable l17 failed, ret=%d\n", ret);
-				return;
-			}
-			pr_info("cypress_power_on is finished.\n");
-		} else {
-			ret = regulator_disable(reg_l17);
-			if (ret) {
-				pr_err("disable l17 failed, ret=%d\n", ret);
-				return;
-			}
-			pr_info("cypress_power_off is finished.\n");
-		}
-
-	} else {
-		if (!reg_l29) {
-			reg_l29 = regulator_get(NULL, "8921_l29");
-			if (IS_ERR(reg_l29)) {
-				pr_err("could not get 8921_l29, ret = %ld\n",
-					PTR_ERR(reg_l29));
-				return;
-			}
-
-			ret = regulator_set_voltage(reg_l29, 1800000, 1800000);
-			if (ret) {
-				pr_err("%s: unable to set ldo17 voltage to 1.8V\n",
-					__func__);
-				return;
-			}
-		}
-
-		if (onoff) {
-			ret = regulator_enable(reg_l29);
-			if (ret) {
-				pr_err("enable l29 failed, ret=%d\n", ret);
-				return;
-			}
-			gpio_direction_output(GPIO_TKEY_LED, 1);
-			pr_info("cypress_power_on is finished.\n");
-		} else {
-			ret = regulator_disable(reg_l29);
-			if (ret) {
-				pr_err("disable l29 failed, ret=%d\n", ret);
-				return;
-			}
-			gpio_direction_output(GPIO_TKEY_LED, 0);
-			pr_info("cypress_power_off is finished.\n");
-		}
-	}
-}
-#else
-static void cypress_power_onoff(int onoff)
-{
-		int ret;
-	static struct regulator *reg_lvs5;
-
-	if (!reg_lvs5) {
-		reg_lvs5 = regulator_get(NULL, "8921_lvs5");
-		if (IS_ERR(reg_lvs5)) {
-			pr_err("could not get 8921_lvs5, rc = %ld\n",
-				PTR_ERR(reg_lvs5));
-				return;
-			}
-		}
-
-		if (onoff) {
-			ret = regulator_enable(reg_lvs5);
-			if (ret) {
-				pr_err("enable lvs5 failed, rc=%d\n", ret);
-				return;
-			}
-		pr_info("cypress_power_on is finished.\n");
-		} else {
-			ret = regulator_disable(reg_lvs5);
-			if (ret) {
-				pr_err("disable lvs5 failed, rc=%d\n", ret);
-				return;
-			}
-		pr_info("cypress_power_off is finished.\n");
-	}
-
-	if (onoff)
-		gpio_direction_output(GPIO_TOUCH_KEY_EN, 1);
-	else
-		gpio_direction_output(GPIO_TOUCH_KEY_EN, 0);
-}
-#endif
-#endif
 void ApplyTargetVDD(void)
 {
 	gpio_direction_input(GPIO_TOUCHKEY_SDA);

@@ -1,4 +1,6 @@
 #ifdef __KERNEL__
+#define __DLOG_IMPLEMENTAION_MODULE__
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
@@ -42,7 +44,11 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <asm/uaccess.h>
-#include "msm_fb_panel.h"
+
+#include "dlog.h"
+#include <linux/input.h>
+#include "linux/debugfs.h"
+
 #define CFAKE_DEVICE_NAME "ddebugger"
 #else
 #include <ctype.h>
@@ -64,17 +70,34 @@
 #endif
 
 #define __DLOG_IMPLEMENTAION_MODULE__
-#include <dlog.h>
-u32 __debug_mdp_phys = 0x0000;
+#include "mdp.h"
+#ifndef __KERNEL__
+u32 __debug_mdp_phys = 0x7FD00000;
+#else
+u32 __debug_mdp_phys = 0x00000;
+#endif
 
 
 static u32 dump_size;
 struct debug_mdp *debug_mdp;
 //MDP Instace Variable
 #ifdef __KERNEL__
-spinlock_t xlock;
-extern struct msm_mdp_interface mdp5;
+#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
+extern struct sec_debug_log *secdbg_log;
+extern struct sec_debug_subsys_data_krait *secdbg_krait;
+extern struct _dlogdebug __start___dlog[];
+extern struct _dlogdebug __stop___dlog[];
+extern struct mdss_data_type *mdss_res;
 #endif
+static spinlock_t xlock;
+extern struct msm_mdp_interface mdp5;
+static int sec_debug_level = 1;
+#endif
+#define DLOG_BUFFER_SIZE 2000
+#define DLOG_BUFFER_SIZE_SHIP 200
+#define REGISTER_LOG_LEN 110
+#define EVENT_DESC_LEN 10
+#define CLOCK_DUMP_LEN 2
 
 #define CHIP_GPIO_COUNT_8974  584
 
@@ -91,8 +114,9 @@ static struct reg_desc mdss_reg_desc[]=
 /* mdp_reg_info.txt contains the values to be initialized */
 int read_ongoing;
 
-volatile u32 mdp_reg_info[257] = {16, 260, 5243152, 7340336, 2097504, 10486144, 10486320, 3146464, 2097920, 2097936, 2097952, 8389536, 992, 1049588, 2098176, 1072, 10486864, 5244072, 3146992, 8390144, 1584, 8390400, 1840, 8390656, 2096, 8390912, 2352, 8391168, 2608, 1053696, 11539472, 5200, 5216, 5232, 3151044, 5344, 5360, 5376, 20976912, 10490368, 3150384, 4198984, 4720, 7344804, 2101968, 2101984, 1054720, 11540496, 6224, 6240, 6256, 3152068, 6368, 6384, 6400, 20977936, 10491392, 3151408, 4200008, 5744, 7345828, 2102992, 2103008, 1055744, 11541520, 7248, 7264, 7280, 3153092, 7392, 7408, 7424, 20978960, 10492416, 3152432, 4201032, 6768, 7346852, 2104016, 2104032, 8196, 1056784, 1056800, 10493440, 3153456, 4202056, 7792, 7347876, 2105040, 2105056, 9220, 1057808, 1057824, 10494464, 3154480, 4203080, 8816, 7348900, 2106064, 2106080, 10244, 1058832, 1058848, 10495488, 3155504, 4204104, 9840, 7349924, 2107088, 2107104, 10496512, 3156528, 4205128, 10864, 7350948, 2108112, 2108128, 10497536, 3157552, 4206152, 11888, 7351972, 2109136, 2109152, 2109952, 12816, 10498592, 10498640, 10498688, 27275952, 2110240, 2110256, 1061888, 1061904, 2110496, 2110976, 13840, 10499616, 10499664, 10499712, 27276976, 2111264, 2111280, 1062912, 1062928, 2111520, 2112000, 14864, 10500640, 10500688, 10500736, 27278000, 2112288, 2112304, 1063936, 1063952, 2112544, 2113024, 15888, 10501664, 10501712, 10501760, 27279024, 2113312, 2113328, 1064960, 1064976, 2113568, 2114048, 16912, 10502688, 10502736, 10502784, 27280048, 2114336, 2114352, 1065984, 1066000, 2114592, 17920, 18256, 3164004, 3164176, 6309932, 2115760, 2115776, 27281616, 18944, 19280, 3165028, 3165200, 6310956, 2116784, 2116800, 27282640, 19968, 20304, 3166052, 3166224, 6311980, 2117808, 2117824, 27283664, 3215616, 1118496, 3215664, 69960, 1118580, 16847712, 70576, 9515264, 3223856, 78152, 1126772, 16855904, 78768, 9523456, 3232048, 86344, 1134964, 16864096, 86960, 9531648, 3240240, 94536, 1143156, 16872288, 95152, 9539840, 3248432, 102728, 1151348, 16880480, 103344, 24252672, 135556, 135568, 1184172, 7475712, 24253184, 136068, 136080, 1184684, 7476224, 24253696, 136580, 136592, 1185196, 7476736, 24254208, 137092, 137104, 1185708, 7477248, 12720896, 12721152, 12721408};
-
+volatile u32 mdp_reg_info[257] = {16, 260, 5243152, 7340336, 2097504, 10486144, 10486320, 3146464, 2097920, 2097936, 2097952, 8389536, 992, 1049588, 2098176, 1072, 10486864, 5244072, 3146992, 8390144, 1584, 8390400, 1840, 8390656, 2096, 8390912, 2352, 8391168, 2608, 1053696, 11539472, 5200, 5216, 5232, 3151044, 5344, 5360, 5376, 20976912, 10490368, 3150384, 4198984, 4720, 7344804, 2101968, 2101984, 1054720, 11540496, 6224, 6240, 6256, 3152068, 6368, 6384, 6400, 20977936, 10491392, 3151408, 4200008, 5744, 7345828, 2102992, 2103008, 1055744, 11541520, 7248, 7264, 7280, 3153092, 7392, 7408, 7424, 20978960, 10492416, 3152432, 4201032, 6768, 7346852, 2104016, 2104032, 8196, 1056784, 1056800, 10493440, 3153456, 4202056, 7792, 7347876, 2105040, 2105056, 9220, 1057808, 1057824, 10494464, 3154480, 4203080, 8816, 7348900, 2106064, 2106080, 10244, 1058832, 1058848, 10495488, 3155504, 4204104, 9840, 7349924, 2107088, 2107104, 10496512, 3156528, 4205128, 10864, 7350948, 2108112, 2108128, 10497536, 3157552, 4206152, 11888, 7351972, 2109136, 2109152, 2109952, 12816, 10498592, 10498640, 10498688, 27275952, 2110240, 2110256, 1061888, 1061904, 2110496, 2110976, 13840, 10499616, 10499664, 10499712, 27276976, 2111264, 2111280, 1062912, 1062928, 2111520, 2112000, 14864, 10500640, 10500688, 10500736, 27278000, 2112288, 2112304, 1063936, 1063952, 2112544, 2113024, 15888, 10501664, 10501712, 10501760, 27279024, 2113312, 2113328, 1064960, 1064976, 2113568, 2114048, 16912, 10502688, 10502736, 10502784, 27280048, 2114336, 2114352, 1065984, 1066000, 2114592, 17920, 18256, 3164004, 3164176, 6309932, 2115760, 2115776, 27281616, 18944, 19280, 3165028, 3165200, 6310956, 2116784, 2116800, 27282640, 19968, 20304, 3166052, 3166224, 6311980, 2117808, 2117824, 27283664, 3215616, 1118496, 3215664, 69960, 1118580, 16847712, 70576, 9515264, 3223856, 78152, 1126772, 16855904, 78768, 9523456, 3232048, 86344, 1134964, 16864096, 86960, 9531648, 3240240, 94536, 1143156, 16872288, 95152, 9539840, 3248432, 102728, 1151348, 16880480, 103344, 24252672, 
+ 135568, 1184172, 7475712, 24253184, 136068, 136080, 1184684, 7476224, 24253696, 136580, 136592, 1185196, 7476736, 24254208, 137092, 137104, 1185708, 7477248, 12720896, 12721152, 12721408};
+u32 mdp_reg_vaddr[257];
 /*TODO: Optimize/correct this function*/
 int check_duplicate_event(u32 *event_buff, u32 address) {
 	int i;
@@ -105,47 +129,14 @@ int check_duplicate_event(u32 *event_buff, u32 address) {
 	return 0;
 }
 
-void dump_event_code(void){
-	static u32 *dump_buff = NULL;
-	static u32 *event_buff = NULL;
-	int log_buff_first = debug_mdp->log_buff.first;
-	int log_buff_last = debug_mdp->log_buff.last;
-	int index = 0;
-	struct dump_event *dump_event = NULL;	
-	if((debug_mdp !=NULL) && (dump_buff == NULL)) {
-		dump_buff=  (u32 *)((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->log_buff.offset));		
-	}
-	
-	if((debug_mdp !=NULL) && (event_buff == NULL)) {
-		event_buff=  (u32 *)((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->event_desc.offset));		
-	}
-	pr_info("[Dlogger] debug_mdp: %p, log_buff: %p, event_buf: %p\n", debug_mdp, dump_buff, event_buff);
-	dump_event = (struct dump_event *)event_buff;
-	/*Reset previous entries(tempory, TODO: Pls provide optimize solution )*/
-	memset(event_buff,0x0,debug_mdp->event_desc.len);
-	while((index < debug_mdp->event_desc.len/sizeof(struct dump_event)) && log_buff_first != log_buff_last) {
-			if(dump_buff[log_buff_first] == 0xDEADBABE) {
-				if (!check_duplicate_event(event_buff, dump_buff[log_buff_first+1])) {
-					dump_event[index].ret_address = dump_buff[log_buff_first+1];				
-					snprintf(dump_event[index].func_name, 60, "%pS", (void *)dump_buff[log_buff_first+1]);			
-						index++;
-					}
-			}
-				
-		log_buff_first++;
-		log_buff_first %= (debug_mdp->log_buff.len/4);
-		
-	}
-	debug_mdp->event_desc.last = index;
-}
-	
 void inc_put(u32 *buff,u32 l){
 
 	buff[debug_mdp->log_buff.last] = l;
 	debug_mdp->log_buff.last++;
 	debug_mdp->log_buff.last %=  (debug_mdp->log_buff.len/sizeof(u32));
 	if(debug_mdp->log_buff.last == debug_mdp->log_buff.first) {
-						debug_mdp->log_buff.first++;
+						int count  = buff[debug_mdp->log_buff.first] &0x1F;
+						debug_mdp->log_buff.first += count;  
 						debug_mdp->log_buff.first %= (debug_mdp->log_buff.len/sizeof(u32));
 	}
 	pr_debug("[DDEBUGGER] buff:%p, first:%d, last:%d, Val: %x\n",buff,debug_mdp->log_buff.first,debug_mdp->log_buff.last,(u32)l);
@@ -176,21 +167,14 @@ static struct dclock clock_list[] = {
 
 #define writelx(r,v) writel((v),(r))
 
+	void *vHWIO_GCC_DEBUG_CLK_CTL_ADDR = (void*)0xfc401880;
+    void *vHWIO_MMSS_DEBUG_CLK_CTL_ADDR = (void*)0xfd8c0900;
+    void *vHWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR = (void*)0xfc401888;
+    void *vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR =(void*) 0xfc401884;
+    void *vHWIO_GCC_XO_DIV4_CBCR_ADDR = (void*)0xfc4010c8;
+
 static long read_clock(u32 clk_test,u32 clk_reg){
 	long clock_val;
-#ifdef __KERNEL__
-	void *vHWIO_GCC_DEBUG_CLK_CTL_ADDR = ioremap((0xfc401880),4);
-	void *vHWIO_MMSS_DEBUG_CLK_CTL_ADDR = ioremap(0xfd8c0900,4);
-	void *vHWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR = ioremap(0xfc401888,4);
-	void *vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR = ioremap(0xfc401884,4);
-	void *vHWIO_GCC_XO_DIV4_CBCR_ADDR = ioremap(0xfc4010c8,4);
-#else
-	void *vHWIO_GCC_DEBUG_CLK_CTL_ADDR = 0xfc401880;
-    void *vHWIO_MMSS_DEBUG_CLK_CTL_ADDR = 0xfd8c0900;
-    void *vHWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR = 0xfc401888;
-    void *vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR = 0xfc401884;
-    void *vHWIO_GCC_XO_DIV4_CBCR_ADDR = 0xfc4010c8;
-#endif
 
 	pr_debug("%s: test:0x%x reg:%x\n",__func__,clk_test,clk_reg);
 
@@ -259,9 +243,9 @@ static long read_clock(u32 clk_test,u32 clk_reg){
 			//Wait for the counters to finish
 			mdelay(1);
 			while ((temp = readl_relaxed(vHWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR)&0x2000000)==0) 
-				 pr_info("HWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR:0x%X\n",temp);
+				 pr_debug("HWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR:0x%X\n",temp);
 			
-			pr_info("%s:4\n",__func__);		
+			pr_debug("%s:4\n",__func__);		
 			// Turn off the test clock and read the clock count
 			measure_ctl = readl_relaxed(vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR);
 			writelx(vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR, measure_ctl&~0x100000);
@@ -283,7 +267,7 @@ static long read_clock(u32 clk_test,u32 clk_reg){
 			//Config XO DIV4 comparator clock
 			
 			writelx(vHWIO_GCC_XO_DIV4_CBCR_ADDR,readl_relaxed(vHWIO_GCC_XO_DIV4_CBCR_ADDR)|0x1);
-				pr_info("%s:7\n",__func__);		
+				pr_debug("%s:7\n",__func__);		
 			// Start with the counter disabled	 
 			measure_ctl=readl_relaxed(vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR) ; 
 			measure_ctl=measure_ctl&~0x1FFFFF ; 
@@ -381,95 +365,6 @@ void dump_clock_state(void)
 	
 }
 
-#if defined(CONFIG_LCD_CLASS_DEVICE)
-static int atoi(const char *name)
-{
-        int val = 0;
-
-        for (;; name++) {
-                switch (*name) {
-                case '0' ... '9':
-                        val = 10*val+(*name-'0');
-                        break;
-                default:
-                        return val;
-                }
-        }
-}
-
-static int start_off;
-static ssize_t mdp_debug_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	char *buff = ((char *)debug_mdp + start_off);	
-	int i = 0;
-	int index= 0;
-	
-	for(i = 0; ((i < 4095) && (index + start_off < dump_size))  ;index++) {
-		int c = 0;
-		if((index !=0) && ((index % 4) == 0)) {c+= snprintf(buf+i,3," ");
-				if( index % 16 == 0) c+= snprintf(buf+i+c,3,"\n");
-		}
-		c+=snprintf(buf+i+c,8,"%02X(%c) ",(unsigned int)buff[index],buff[index]);
-		
-		
-		i+=c;
-	}
-	buf[i] = 0;
-	return 4095;
-}
-static ssize_t mdp_debug_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size) {
-	int sstart_off = atoi(buf);
-	if(sstart_off < 32) return 4; 
-	if(sstart_off == 32) sstart_off = 0;
-	start_off = sstart_off;
-	//__DLOG_(0xAA,0xBB);
-//	dump_event_code();
-	//klog();
-	return 4;
-}
-
-static ssize_t mdp_regdump_start(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size) {
-	//klog();
-	//dump_clock_state();
-	debug_mdp->log_buff.first = 0;
-	debug_mdp->log_buff.last = 0;
-	return 4;
-}
-static ssize_t mdp_clock_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	int i = 0;int count = 0;int size = debug_mdp->clock_state.last * 4;
-	char *dump = ((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->clock_state.offset)) + 4;
-  dump_clock_state();
-  
-  for(i = 0; i < size;) {
-  		int clk_count = *((u32 *)(dump+sizeof(clock_list[0].name)));
-  		int freq = ((48*4)*(2*clk_count+3)/(2*10))*2/(2*(0x8000)+7); 
-		count += snprintf(buf+count,1024," Clock: %s -- %d Mhz\n", dump,freq);
-		dump += sizeof(clock_list[0].name) + 4;
-		i += sizeof(clock_list[0].name) + 4;
-  }
-
- return count;;
-}
-
-static DEVICE_ATTR(mdp_debug, S_IRUGO | S_IWUSR,
-			mdp_debug_show,
-			mdp_debug_store);
-static DEVICE_ATTR(mdp_regdump, S_IRUGO | S_IWUSR,
-			mdp_clock_show,
-			mdp_regdump_start);
-
-
-static struct lcd_ops mdp_debug_props = {
-	 .get_power = NULL,
-	 .set_power = NULL,
- };
-#endif
-
 int fill_reg_log(u32 *buff, u32 base, int len)
 {	
 	int i;
@@ -561,91 +456,7 @@ if(1){
 	pr_info("total mdp regs: %d\n",mdp_reg_count);
 }
 
-
-/*      		MDP_STATS_MAGIC+0:
-                        intf: inf_num play_cnt vsync_cnt underrun_cnt
-                        MDP_STATS_MAGIC+1:
-                        wb:   mode play_cnt
-                        MDP_STATS_MAGIC+2:
-                        vig_pipe interrupt cnt
-                        MDP_STATS_MAGIC+3:
-                        rgb_pipe interrupt cnt
-                        MDP_STATS_MAGIC+4:
-                        dma_pipe interrupt cnt                          		*/
-#ifdef __KERNEL__
-#if 0
-void dump_mdp_stats(void)
-{
-	int i;
-	static u32 *buff = NULL;
-	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-	if(mdata != NULL){
-		if(debug_mdp && buff == NULL){
-                buff = (u32 *)((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->mdp_stats.offset));
-        	}
-        	else if(!debug_mdp){
-                	pr_info("Debug module not Initialized\n");
-                	return ;
-        	}	
-		pr_info("KK: (%s)::>> debug_mdp->mdp_stats.last = %x\n", __func__, debug_mdp->mdp_stats.last);
-		debug_mdp->mdp_stats.last = debug_mdp->mdp_stats.first;
-		for(i = 0; i < mdata->nctl; i++){
-			if((mdata->ctl_off+i)->intf_num){
-				buff[debug_mdp->mdp_stats.last++] = START_MAGIC+0;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->intf_num;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->play_cnt;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->vsync_cnt;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->underrun_cnt;
-			}
-			else{
-				buff[debug_mdp->mdp_stats.last++] = START_MAGIC+1;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->opmode;
-				buff[debug_mdp->mdp_stats.last++] = (mdata->ctl_off+i)->play_cnt;
-			}
-		}
-		for(i = 0; i < mdata->nvig_pipes; i++){
-			buff[debug_mdp->mdp_stats.last++] = START_MAGIC+2;
-			buff[debug_mdp->mdp_stats.last++] = (mdata->vig_pipes+i)->play_cnt;
-		}
-		for(i = 0; i < mdata->nrgb_pipes; i++){
-			buff[debug_mdp->mdp_stats.last++] = START_MAGIC+3;
-                        buff[debug_mdp->mdp_stats.last++] = (mdata->rgb_pipes+i)->play_cnt;
-		}
-		for(i = 0; i < mdata->ndma_pipes; i++){
-			buff[debug_mdp->mdp_stats.last++] = START_MAGIC+4;
-                        buff[debug_mdp->mdp_stats.last++] = (mdata->dma_pipes+i)->play_cnt;
-		}
-	}
-	else{
-		pr_info("mdata not initialized\n");
-		return;
-	}
-}
-
-void dump_overlay_stats(void)
-{
-	static u32 *buff = NULL;
-	struct msm_mdp_interface *mdp_instance = &mdp5;
-	struct mdss_overlay_private *mdp5_data;
-
-	mdp5_data = (struct mdss_overlay_private *)(mdp_instance->private1);
-	if(debug_mdp && buff == NULL)
-		buff = (u32 *)((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->overlay_stats.offset));
-	else if(!debug_mdp){
-		pr_info("Debug module not Initialized\n");
-                return ;
-	}
-	pr_info("KK: -----------> (%s)::>>> %p\n", __func__, mdp5_data);
-	debug_mdp->overlay_stats.last = debug_mdp->overlay_stats.first;
-	buff[debug_mdp->overlay_stats.last++] = START_MAGIC;
-	/* --------------------------------
-		dump whatever is needed from mdp5_data here
-	---------------------------------------*/
-}
-#endif
-#endif
-
-void dlog(u32 eventid, ...)
+void dlog(struct _dlogdebug *desc, ...)
 {	
 	
 	
@@ -653,11 +464,15 @@ void dlog(u32 eventid, ...)
 
 	static u32 *buff = NULL;
 	unsigned long flags;
+	int ev_idx = desc - __start___dlog;
+	int para_count = 0;
+	int temp_main_idx = 0 ;
 #ifdef __KERNEL__
 	ktime_t time;
 	if(!debug_mdp) return;
 
 	spin_lock_irqsave(&xlock, flags);
+
 	if(read_ongoing) {
 		spin_unlock_irqrestore(&xlock, flags);
 		return;
@@ -666,50 +481,54 @@ void dlog(u32 eventid, ...)
 	time_t time;
 #endif
 	if(debug_mdp && buff == NULL ) {
+		
 		buff=  (u32 *)((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->log_buff.offset));
+		
 	}
 	else if(!debug_mdp){
 #ifdef __KERNEL__
 		spin_unlock_irqrestore(&xlock, flags);
 #endif
-	//	pr_info("Debug Module Not Initialized\n");
-
+		pr_info("Debug Module Not Initialized\n");	
 		return;
 	}
-	
-	
-	inc_put(buff,0xDEADBABE);
+	//Store the reference of 32bit header
+	temp_main_idx = debug_mdp->log_buff.last;
+	inc_put(buff,(current->pid<<16)|(ev_idx<<5));
 #ifdef __KERNEL__	
 	time = ktime_get();
+	inc_put(buff,(u32)ktime_to_us(time));
 #else
 	time = current_time();
+	inc_put(buff,(u32)time);
+
 #endif
-	inc_put(buff,(u32) __builtin_return_address(0));
-	inc_put(buff,(u32)ktime_to_us(time));;
-	inc_put(buff,(u32)current->pid);
-	va_start(argp, eventid);
+
+	
+	va_start(argp,(u32) desc);
 	do{
 		u32 l = va_arg(argp, u32);
 	//	pr_info("[DLOG],%pS: %x\n",__builtin_return_address(0),l);
 		if(l==0xBABEBABE) 
 			break;
 		inc_put(buff,l);
+		para_count++;
 	}while(1);
 	va_end(argp);
-	 
+
+	 para_count += 2;// 1 for main indx, 1 for time
+
+	 //Put the length
+	 buff[temp_main_idx] = buff[temp_main_idx] | (para_count & 0x1F); //5 bits for length
 #ifdef __KERNEL__ 
 	spin_unlock_irqrestore(&xlock, flags);
 #endif
 }
  
 #ifdef __KERNEL__ 
- struct platform_device mdp_debug_dev = {
-		 .name = "MDP DEBUG MODULE",
-		 .id = 0,
-	 };
+
 
  
- static struct class *cfake_class = NULL;
  static unsigned long read_byte;
  /* 
   * Called when a process tries to open the device file, like
@@ -721,17 +540,23 @@ void dlog(u32 eventid, ...)
 	printk(" Dlogger Opened>>>\n");
 	 return 0;
  }
+
+static enum  {	DLOG_BUFFER_READING,	KLOG_BUFFER_READING,	SECLOG_BUFFER_READING, }read_state;
+
+
  int dlog_read(struct file *filp, char __user *buf, size_t count, 
 
 	loff_t *f_pos)
 
 {
 	ssize_t retval = 0;
-	int err;
 	unsigned long flags;
+	int ret = 0;
+	
 	if(*f_pos == 0) {
-		dump_event_code();
+
 		pr_info("===DLogger Header=====\n");
+		pr_info(" DUMP SIZE: %u, read: %lu\n",debug_mdp->size,read_byte);
 		pr_info("[0] first: %d last: %d  off: %d size: %d\n",
 					debug_mdp->log_buff.first, debug_mdp->log_buff.last,
 					debug_mdp->log_buff.offset, debug_mdp->log_buff.len);
@@ -742,54 +567,117 @@ void dlog(u32 eventid, ...)
 		pr_info("[2] first: %d last: %d  off: %d size: %d\n",
 					debug_mdp->reg_log.first, debug_mdp->reg_log.last,
 					debug_mdp->reg_log.offset, debug_mdp->reg_log.len);
+		pr_info("[3] first: %d last: %d  off: %d size: %d\n",
+					debug_mdp->clock_state.first, debug_mdp->clock_state.last,
+					debug_mdp->clock_state.offset, debug_mdp->clock_state.len);
 #ifdef __KERNEL__
+
 		spin_lock_irqsave(&xlock, flags);
-		read_ongoing = 1;
+		read_ongoing = 1;	
+		debug_mdp->reserv = CONFIG_NR_CPUS;
+#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
+		debug_mdp->klog_size =secdbg_krait->log.size;
+		debug_mdp->seclog_size = 0;
+		pr_debug("Klog Size: %d SecLog Size: %d\n", debug_mdp->klog_size, debug_mdp->seclog_size);
+		
+#endif		
 		spin_unlock_irqrestore(&xlock, flags);
 #endif
 
 	}
-	if(read_byte >= debug_mdp->size) {
+
+		if(read_state == DLOG_BUFFER_READING && read_byte >= debug_mdp->size ) {
 #ifdef __KERNEL__
-		spin_lock_irqsave(&xlock, flags);
-		read_ongoing = 0;
-		debug_mdp->log_buff.first = 0;
-		debug_mdp->log_buff.last = 0;
-		debug_mdp->event_desc.first = 0;
-		debug_mdp->event_desc.last = 0;
-		spin_unlock_irqrestore(&xlock, flags);
+					spin_lock_irqsave(&xlock, flags);
+					read_ongoing = 0;
+					debug_mdp->reg_log.first = 0;
+					debug_mdp->reg_log.last = 0;
+					debug_mdp->clock_state.first = 0;
+					debug_mdp->clock_state.last = 0;
+					read_state = KLOG_BUFFER_READING;
+				
+					spin_unlock_irqrestore(&xlock, flags);
 #endif
-		return 0;
+		
+#ifndef CONFIG_SEC_DEBUG_SCHED_LOG
+					read_state = DLOG_BUFFER_READING;
+					read_byte = 0;
+					pr_info("Reading complete...\n");
+					return 0;
+#endif
 	}
-	pr_info("(count + *f_pos - 1):=%llu\n",(count + *f_pos - 1));
-	retval = ((count + *f_pos - 1)< debug_mdp->size)? count-1:(debug_mdp->size - *f_pos);
+
+	if(read_state == DLOG_BUFFER_READING)
+	{
+		pr_debug("(count + *f_pos - 1):=%llu\n",(count + *f_pos - 1));
+		retval = ((count + *f_pos - 1)< debug_mdp->size)? count-1:(debug_mdp->size - *f_pos);
+		
+		ret = copy_to_user(buf, (char *)debug_mdp + *f_pos, retval);
+		if(ret < 0)
+			return 0;
+		read_byte += retval;
+		*f_pos = read_byte;
+		pr_debug("-read: %lu, fpos = %llu :count = %d:retval: %d: dump_size: %d\n",read_byte,*f_pos,count,retval,debug_mdp->size);
+	}
+
+#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
 	
-		err = copy_to_user(buf, (char *)debug_mdp + *f_pos, retval);
-	read_byte += retval;
-	*f_pos = read_byte;
-	pr_info("-read: %lu, fpos = %llu :count = %d:retval: %d: dump_size: %d\n",read_byte,*f_pos,count,retval,debug_mdp->size);
+	if(read_state == KLOG_BUFFER_READING && read_byte >= debug_mdp->size + debug_mdp->klog_size ) {
+
+		read_state = DLOG_BUFFER_READING;
+					read_byte = 0;
+					pr_info("Reading complete...\n");
+	}
+
+	
+
+	if(read_state == KLOG_BUFFER_READING)
+	{
+		int start = *f_pos - debug_mdp->size;
+		
+		retval = ((count + *f_pos - 1)< debug_mdp->size +debug_mdp->klog_size)? count-1:(debug_mdp->size +debug_mdp->klog_size- *f_pos);
+		ret = copy_to_user(buf, (char *)__va(secdbg_krait->log.log_paddr) + start, retval);	
+		if(ret < 0)
+					return 0;
+
+		read_byte += retval;
+		*f_pos = read_byte;
+	}
+
+#endif
 
 	return retval;
 
 }
- struct file_operations cfake_fops = {
+  static int reg_open(struct inode *inode, struct file *file)
+  {
+	  pr_info("Register dump opened\n");
+	  return 0;
+  }
+  int reg_read(struct file *filp, char __user *buf, size_t count, 
  
-	 .owner =	 THIS_MODULE,
+	 loff_t *f_pos)
  
-	 .read =	 dlog_read,
- 
-	 .write =	 NULL,
- 
-	 .open =	 device_open,
- 
-	 .release =  NULL,
- 
-	 .llseek =	 NULL,
- 
- };
- static unsigned int cfake_major = 0;
+ {
+		dump_clock_state();
+		klog();
+		return 0;
+ }
 
- struct cdev cdev;
+ static const struct file_operations reg_fops = {
+	 .open = reg_open,
+	 .release = NULL,
+	 .read = reg_read,
+	 .write = NULL,
+ };
+
+ static const struct file_operations dlog_fops = {
+	 .open = device_open,
+	 .release = NULL,
+	 .read = dlog_read,
+	 .write = NULL,
+ };
+
  static int __init setup_debug_memory(char *mode)
  {
 	 __debug_mdp_phys = 0;
@@ -799,40 +687,81 @@ void dlog(u32 eventid, ...)
 	 	pr_info("Display Logging base: %x\n",__debug_mdp_phys);
 	 return 1;
  }
+ 
+ /* Get the size of description section needed */
+ static int get_desc_size(void){
+			int len = __stop___dlog - __start___dlog;
+			int i = 0;
+			int str_len = 0;
+
+			for(; i < len; i++) {
+				struct _dlogdebug *ptr = __start___dlog + i;
+				str_len += strlen(ptr->filename) + 1;
+				str_len += strlen(ptr->format) + 1;
+				str_len += strlen(ptr->function) + 1;
+				str_len += 4; //flags + lineno
+
+			}
+		return str_len;
+ }
+
+ /* Initialize event descriptor section */
+ static void init_event_desc(char *buff,int length){
+		int len = __stop___dlog - __start___dlog;
+		int i = 0;
+		int str_len = 0;
+
+		memset(buff,0x0,length);
+		for(; (i < len && str_len < length); i++) {
+			struct _dlogdebug *ptr = __start___dlog + i;
+			int *line_ptr = 0;
+			str_len += (snprintf(buff+str_len,length-str_len,"%s", ptr->filename) + 1);
+			str_len += (snprintf(buff+str_len,length-str_len,"%s", ptr->format) + 1);
+			str_len += (snprintf(buff+str_len,length-str_len,"%s", ptr->function) + 1);
+			line_ptr  = (int *) (buff + str_len);
+			*line_ptr = ptr->lineno | ptr->flags<<24;
+			str_len += 4; //flags + lineno
+			if(str_len >= length) break;
+		}
+
+ }
+
+ int dlog_sec_get_debug_level(void) {
+		return sec_debug_level;
+ }
  __setup("lcd_dlog_base=", setup_debug_memory);
 #endif
+
+
 #ifdef __KERNEL__
  static int __init mdss_debug_init(void) {
 #else
  int  mdss_debug_init(void) {
 #endif
 		
-#if defined(CONFIG_LCD_CLASS_DEVICE)
-		struct lcd_device *debug_mdp_device;
+		u32 log_buff_len = DLOG_BUFFER_SIZE_SHIP*1024 - sizeof(struct debug_mdp);
+		u32 event_desc_len = 0;
+		u32 reg_log_len = 0;
+		u32 clock_state_len = 0;
+		struct dentry *dent = debugfs_create_dir("dlog", NULL);
+
+#if defined(CONFIG_SEC_DEBUG)
+//		sec_debug_level = sec_debug_is_enabled();
+		sec_debug_level=1;
 #endif
-		int rc,err;
-		u32 log_buff_len = 1000*1024 - sizeof(struct debug_mdp);
-		u32 event_desc_len = 10*1024;
-		u32 reg_log_len = 10*11*1024;
-		u32 mdp_stats_len = 1024;
-		u32 overlay_stats_len = 1024;
-		u32 gpio_state_len = 1024;
-		u32 regulator_state_len = 1024;
-		u32 panel_state_len = 1024;
-		u32 clock_state_len = 2*1024;
-#ifdef __KERNEL__
-		dev_t devno ;
-		dev_t first; 
-		struct device *device = NULL;
-#endif		
-		dump_size = log_buff_len + event_desc_len + reg_log_len  \
-					+ mdp_stats_len + overlay_stats_len+ gpio_state_len \
-					+ regulator_state_len + panel_state_len \
-					+ clock_state_len \
-					+ sizeof(struct debug_mdp);
+		
+		if(sec_debug_level){
+			log_buff_len = DLOG_BUFFER_SIZE*1024;
+			event_desc_len = get_desc_size();
+			reg_log_len = REGISTER_LOG_LEN*1024;
+			clock_state_len = CLOCK_DUMP_LEN*1024;
+		}
+		
+		dump_size = log_buff_len + event_desc_len+ reg_log_len \
+			 +clock_state_len+ sizeof(struct debug_mdp);
 #ifdef __KERNEL__
 		if(__debug_mdp_phys){
-			debug_mdp = ioremap_nocache(__debug_mdp_phys,0x200000);
+			debug_mdp = ioremap_nocache(__debug_mdp_phys,CARVEOUT_MEM_SIZE);
 			pr_info("Using MDSS debug memory from LK:Phys: %x,  VA: %p\n",__debug_mdp_phys,debug_mdp);
 			
 		}
@@ -846,124 +775,77 @@ void dlog(u32 eventid, ...)
 		} 
 		//debug_mdp->log_buff.offset = 0;
 		
-		pr_info(KERN_INFO "MDP debug init:debug_mdp: %p , (addr => 0x%x)\n",debug_mdp, __pa(debug_mdp));
-
-		
-		rc = platform_device_register(&mdp_debug_dev);
+		pr_info(KERN_INFO "MDP debug init:debug_mdp: %p \n",debug_mdp);
 #else
 		debug_mdp = __debug_mdp_phys;
 
 		memset(debug_mdp,0x0,0x200000);
 
 #endif
-#if defined(CONFIG_LCD_CLASS_DEVICE) && !defined(DLOG_USER_VARIANT)
-		debug_mdp_device = lcd_device_register("mdp_debug", &mdp_debug_dev.dev, NULL,
-					&mdp_debug_props);
-
-
-		rc = sysfs_create_file(&debug_mdp_device->dev.kobj,
-					&dev_attr_mdp_debug.attr);
-			if (rc) {
-				pr_info("sysfs create fail-%s\n",
-						dev_attr_mdp_debug.attr.name);
-			}
-			
-		rc = sysfs_create_file(&debug_mdp_device->dev.kobj,
-					&dev_attr_mdp_regdump.attr);
-			if (rc) {
-				pr_info("sysfs create fail-%s\n",
-						dev_attr_mdp_regdump.attr.name);
-			}
-#endif
-		if(!__debug_mdp_phys){
-			debug_mdp->log_buff.len = log_buff_len; //(((DUMP_SIZE-sizeof(struct debug_mdp))*3)/4);
-			debug_mdp->size = dump_size;
+		if(!__debug_mdp_phys || (__debug_mdp_phys == (u32)debug_mdp)){
+			/* Initialize buffer header */
+			debug_mdp->log_buff.len = log_buff_len; 
 
 			debug_mdp->event_desc.offset = debug_mdp->log_buff.offset + debug_mdp->log_buff.len;
-			debug_mdp->event_desc.len = event_desc_len;    //DUMP_SIZE - (sizeof(struct debug_mdp) + debug_mdp->log_buff.len);
+			debug_mdp->event_desc.len = event_desc_len;   
 			
 			debug_mdp->reg_log.offset = debug_mdp->event_desc.offset + debug_mdp->event_desc.len;
 			debug_mdp->reg_log.len = reg_log_len;
 
-			debug_mdp->mdp_stats.offset = debug_mdp->reg_log.offset + debug_mdp->reg_log.len;		
-			debug_mdp->mdp_stats.len = mdp_stats_len;
-
-			debug_mdp->overlay_stats.offset = debug_mdp->mdp_stats.offset + debug_mdp->mdp_stats.len;
-			debug_mdp->overlay_stats.len = overlay_stats_len;
-
-			debug_mdp->panel_state.offset = debug_mdp->overlay_stats.offset + debug_mdp->overlay_stats.len;
-			debug_mdp->panel_state.len = panel_state_len;
-
-			debug_mdp->regulator_state.offset = debug_mdp->panel_state.offset + debug_mdp->panel_state.len;
-			debug_mdp->regulator_state.len = regulator_state_len;
-
-			debug_mdp->clock_state.offset = debug_mdp->regulator_state.offset + debug_mdp->regulator_state.len;
+			debug_mdp->clock_state.offset = debug_mdp->reg_log.offset + debug_mdp->reg_log.len;
 			debug_mdp->clock_state.len = clock_state_len;
-			
-			pr_info("size:%d",sizeof(debug_mdp));
+			debug_mdp->size = dump_size;
+			pr_info("size:%d",sizeof(debug_mdp->size));
+				
 			strncpy(debug_mdp->marker,"*#$$_START_OF_MDP_DEBUG_DUMP##$", sizeof("*#$$_START_OF_MDP_DEBUG_DUMP##$"));
+			if(debug_mdp !=NULL)
+				init_event_desc((char *)debug_mdp + (sizeof(struct debug_mdp) + debug_mdp->event_desc.offset), debug_mdp->event_desc.len);		
+
+		}else {
+			pr_info("===DLogger Header=====\n");
+			pr_info(" DUMP SIZE: %u\n",debug_mdp->size);
+			pr_info("[0] first: %d last: %d  off: %d size: %d\n",
+						debug_mdp->log_buff.first, debug_mdp->log_buff.last,
+						debug_mdp->log_buff.offset, debug_mdp->log_buff.len);
+			
+			pr_info("[1] first: %d last: %d  off: %d size: %d\n",
+						debug_mdp->event_desc.first, debug_mdp->event_desc.last,
+						debug_mdp->event_desc.offset, debug_mdp->event_desc.len);
+			pr_info("[2] first: %d last: %d  off: %d size: %d\n",
+						debug_mdp->reg_log.first, debug_mdp->reg_log.last,
+						debug_mdp->reg_log.offset, debug_mdp->reg_log.len);
+			pr_info("[2] first: %d last: %d  off: %d size: %d\n",
+						debug_mdp->clock_state.first, debug_mdp->clock_state.last,
+						debug_mdp->clock_state.offset, debug_mdp->clock_state.len);
 		}
 		
-#ifdef __KERNEL__
-
-
-
-		
+#ifdef __KERNEL__	
 		spin_lock_init(&xlock);
-#if !defined(DLOG_USER_VARIANT)
-	if (alloc_chrdev_region(&first, 0, 3, "dlogger") < 0)
-	 {
-	 	pr_info("Major number allocation failed\n");
-		 return -1;
-	 }
-	 printk(KERN_INFO "<Major, Minor>: <%d, %d>\n", MAJOR(first), MINOR(first));
-	 /* Create device class (before allocation of the array of devices) */
-	  
-	cfake_class = class_create(THIS_MODULE, "dlogger"); 
-	if (IS_ERR(cfake_class)) {
-		err = PTR_ERR(cfake_class);	  
-		printk("DDebugger class create fail\n");
+
+{
+	if(sec_debug_level) {
+		init_clock_va();	
+		vHWIO_GCC_DEBUG_CLK_CTL_ADDR = ioremap((0xfc401880),4);
+		vHWIO_MMSS_DEBUG_CLK_CTL_ADDR = ioremap(0xfd8c0900,4);
+		vHWIO_GCC_CLOCK_FRQ_MEASURE_STATUS_ADDR = ioremap(0xfc401888,4);
+		vHWIO_GCC_CLOCK_FRQ_MEASURE_CTL_ADDR = ioremap(0xfc401884,4);
+		vHWIO_GCC_XO_DIV4_CBCR_ADDR = ioremap(0xfc4010c8,4);
+		if (debugfs_create_file("reg_dump", 0644, dent, 0, &reg_fops)
+								== NULL) {
+							printk(KERN_ERR "%s(%d): debugfs_create_file: debug fail\n",
+								__FILE__, __LINE__);
+							return -1;
+		}
+		pr_info("Init Section: %p",__start___dlog);
+		
+	}
+	if (debugfs_create_file("dlogger", 0644, dent, 0, &dlog_fops)
+			== NULL) {
+		printk(KERN_ERR "%s(%d): debugfs_create_file: debug fail\n",
+			__FILE__, __LINE__);
 		return -1;
 	}
-	cfake_major = MAJOR(first);
-	devno = MKDEV(cfake_major, 0);
-	cdev_init(&cdev, &cfake_fops);
-	cdev.owner = THIS_MODULE;
-	err = cdev_add(&cdev, devno, 1);
-
-	if (err)
-
-	{
-
-		printk(KERN_WARNING "[target] Error %d while trying to add %s%d",
-
-			err, CFAKE_DEVICE_NAME, 0);
-
-        return err;
-
-	}
-    device = device_create(cfake_class, NULL, /* no parent device */ 
-
-        devno, NULL, /* no additional data */
-
-        "dlogger" "%d", 0);
-
-
-
-    if (IS_ERR(device)) {
-
-        err = PTR_ERR(device);
-
-        printk(KERN_WARNING "[target] Error %d while trying to create %s%d",
-
-			err, CFAKE_DEVICE_NAME, 0);
-
-      
-
-        return err;
-
-    }
-#endif
+}
 #endif
 return 0;
  }

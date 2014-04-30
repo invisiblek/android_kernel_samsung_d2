@@ -14,7 +14,6 @@
 #include <linux/mutex.h>
 #include <linux/notifier.h>
 #include <linux/threads.h>
-#include <linux/device.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 #include <linux/completion.h>
@@ -32,11 +31,10 @@
 #define CPUFREQ_TRANSITION_NOTIFIER	(0)
 #define CPUFREQ_POLICY_NOTIFIER		(1)
 
-#define __MP_DECISION_PATCH__
-
 #ifdef CONFIG_CPU_FREQ
 int cpufreq_register_notifier(struct notifier_block *nb, unsigned int list);
 int cpufreq_unregister_notifier(struct notifier_block *nb, unsigned int list);
+extern void disable_cpufreq(void);
 #else		/* CONFIG_CPU_FREQ */
 static inline int cpufreq_register_notifier(struct notifier_block *nb,
 						unsigned int list)
@@ -48,6 +46,7 @@ static inline int cpufreq_unregister_notifier(struct notifier_block *nb,
 {
 	return 0;
 }
+static inline void disable_cpufreq(void) { }
 #endif		/* CONFIG_CPU_FREQ */
 
 /* if (cpufreq_driver->target) exists, the ->governor decides what frequency
@@ -57,6 +56,10 @@ static inline int cpufreq_unregister_notifier(struct notifier_block *nb,
 
 #define CPUFREQ_POLICY_POWERSAVE	(1)
 #define CPUFREQ_POLICY_PERFORMANCE	(2)
+
+/* Minimum frequency cutoff to notify the userspace about cpu utilization
+ * changes */
+#define MIN_CPU_UTIL_NOTIFY   40
 
 /* Frequency values here are CPU kHz so that hardware which doesn't run
  * with some frequencies can complain without having to guess what per
@@ -98,9 +101,7 @@ struct cpufreq_policy {
 	unsigned int		max;    /* in kHz */
 	unsigned int		cur;    /* in kHz, only needed if cpufreq
 					 * governors are used */
-#if defined(__MP_DECISION_PATCH__)
-	unsigned int            utils;  /* in %, CPU utilization */
-#endif
+	unsigned int            util;  /* CPU utilization at max frequency */
 	unsigned int		policy; /* see above */
 	struct cpufreq_governor	*governor; /* see below */
 
@@ -259,14 +260,9 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data);
 int cpufreq_unregister_driver(struct cpufreq_driver *driver_data);
 
 
-#if defined(__MP_DECISION_PATCH__)
 void cpufreq_notify_transition(struct cpufreq_freqs *freqs, unsigned int state);
 void cpufreq_notify_utilization(struct cpufreq_policy *policy,
 		unsigned int load);
-#else
-void cpufreq_notify_transition(struct cpufreq_freqs *freqs, unsigned int state);
-#endif
-
 
 static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy, unsigned int min, unsigned int max)
 {
@@ -337,81 +333,64 @@ static inline unsigned int cpufreq_get(unsigned int cpu)
 /* query the last known CPU freq (in kHz). If zero, cpufreq couldn't detect it */
 #ifdef CONFIG_CPU_FREQ
 unsigned int cpufreq_quick_get(unsigned int cpu);
+unsigned int cpufreq_quick_get_max(unsigned int cpu);
 #else
 static inline unsigned int cpufreq_quick_get(unsigned int cpu)
 {
 	return 0;
 }
+static inline unsigned int cpufreq_quick_get_max(unsigned int cpu)
+{
+	return 0;
+}
 #endif
 
-
 #ifdef CONFIG_SEC_DVFS
-#define TOUCH_BOOSTER_FIRST_FREQ_LIMIT 1134000
-#define TOUCH_BOOSTER_SECOND_FREQ_LIMIT 810000
-#define TOUCH_BOOSTER_FREQ_LIMIT 486000
-
-#define LOW_MAX_FREQ_LIMIT 1188000
-
-#define MIN_FREQ_LIMIT 384000
-#define MAX_FREQ_LIMIT 1512000
-
-enum {
-	SET_MIN = 0,
-	SET_MAX
-};
-
 enum {
 	BOOT_CPU = 0,
-	NON_BOOT_CPU
 };
+
+int get_max_freq(void);
+int get_min_freq(void);
+
+#define MAX_FREQ_LIMIT		get_max_freq() /* 1512000 */
+#define MIN_FREQ_LIMIT		get_min_freq() /* 384000 */
+
+#define MIN_TOUCH_LIMIT		1134000
+#define MIN_TOUCH_HIGH_LIMIT		1890000
+#define MIN_TOUCH_LIMIT_SECOND	810000
+#define MIN_TOUCH_HIGH_LIMIT_SECOND	1566000
+
+#ifdef CONFIG_TARGET_SERIES_DALI
+#define MAX_UNICPU_LIMIT	1188000
+#else
+#define MAX_UNICPU_LIMIT	1242000
+#endif
+
+#define UPDATE_NOW_BITS		0xFF
 
 enum {
-	TOUCH_BOOSTER_FIRST = 1,
-	TOUCH_BOOSTER_SECOND,
-	TOUCH_BOOSTER,
-	UNI_PRO,
-	APPS_MIN,
-	APPS_MAX,
-	USER_MIN,
-	USER_MAX
+	DVFS_NO_ID			= 0,
+
+	/* need to update now */
+	DVFS_TOUCH_ID			= 0x00000001,
+	DVFS_APPS_MIN_ID		= 0x00000002,
+	DVFS_APPS_MAX_ID		= 0x00000004,
+	DVFS_UNICPU_ID			= 0x00000008,
+
+	/* DO NOT UPDATE NOW */
+	DVFS_THERMALD_ID		= 0x00000100,
+
+	DVFS_MAX_ID
 };
 
-enum {
-	TOUCH_BOOSTER_FIRST_BIT = BIT(TOUCH_BOOSTER_FIRST),
-	TOUCH_BOOSTER_SECOND_BIT = BIT(TOUCH_BOOSTER_SECOND),
-	TOUCH_BOOSTER_BIT = BIT(TOUCH_BOOSTER),
-	UNI_PRO_BIT = BIT(UNI_PRO),
-	APPS_MIN_BIT = BIT(APPS_MIN),
-	APPS_MAX_BIT = BIT(APPS_MAX),
-	USER_MIN_BIT = BIT(USER_MIN),
-	USER_MAX_BIT = BIT(USER_MAX)
-};
 
-#define MULTI_FACTOR 10
+int set_freq_limit(unsigned long id, unsigned int freq);
 
-enum {
-	TOUCH_BOOSTER_FIRST_START = TOUCH_BOOSTER_FIRST * MULTI_FACTOR,
-	TOUCH_BOOSTER_FIRST_STOP = TOUCH_BOOSTER_FIRST_START + 1,
-	TOUCH_BOOSTER_SECOND_START = TOUCH_BOOSTER_SECOND * MULTI_FACTOR,
-	TOUCH_BOOSTER_SECOND_STOP = TOUCH_BOOSTER_SECOND_START + 1,
-	TOUCH_BOOSTER_START = TOUCH_BOOSTER * MULTI_FACTOR,
-	TOUCH_BOOSTER_STOP = TOUCH_BOOSTER_START + 1,
-	UNI_PRO_START = UNI_PRO * MULTI_FACTOR,
-	UNI_PRO_STOP = UNI_PRO_START + 1,
-	APPS_MIN_START = APPS_MIN * MULTI_FACTOR,
-	APPS_MIN_STOP = APPS_MIN_START + 1,
-	APPS_MAX_START = APPS_MAX * MULTI_FACTOR,
-	APPS_MAX_STOP = APPS_MAX_START + 1,
-	USER_MIN_START = USER_MIN * MULTI_FACTOR,
-	USER_MIN_STOP = USER_MIN_START + 1,
-	USER_MAX_START = USER_MAX * MULTI_FACTOR,
-	USER_MAX_STOP = USER_MAX_START + 1,
-	UNREGISTERED = 0
-};
-
-int cpufreq_set_limit(unsigned int flag, unsigned int value);
-int cpufreq_set_limit_defered(unsigned int flag, unsigned int value);
-int cpufreq_get_dvfs_state(void);
+unsigned int get_min_lock(void);
+unsigned int get_max_lock(void);
+void set_min_lock(int freq);
+void set_max_lock(int freq);
 
 #endif
 

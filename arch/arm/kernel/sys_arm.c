@@ -12,7 +12,7 @@
  *  have a non-standard calling sequence on the Linux/arm
  *  platform.
  */
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
@@ -59,6 +59,7 @@ asmlinkage int sys_vfork(struct pt_regs *regs)
 	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, regs->ARM_sp, regs, 0, NULL, NULL);
 }
 
+/* Samsung Rooting Restriction Feature */
 #if defined CONFIG_SEC_RESTRICT_FORK
 #if defined CONFIG_SEC_RESTRICT_ROOTING_LOG
 #define PRINT_LOG(...)	printk(KERN_ERR __VA_ARGS__)
@@ -136,16 +137,19 @@ static int sec_restrict_fork(void)
 	 * the tasklist lock here */
 	read_unlock(&tasklist_lock);
 
+	/* 1. Allowed case - init process. */
 	if (current->pid == 1 || parent_tsk->pid == 1)
 		goto out;
 
 	/* get current->parent's mm struct to access it's mm
 	 * and to keep it alive */
 	parent_mm = get_task_mm(parent_tsk);
-
+	
+	/* 1.1 Skip for kernel tasks */
 	if (current->mm == NULL || parent_mm == NULL)
 		goto out;
 
+	/* 2. Restrict case - parent process is /sbin/adbd. */
 	if (sec_check_execpath(parent_mm, "/sbin/adbd")) {
 		shellcred = prepare_creds();
 		if (!shellcred) {
@@ -162,11 +166,14 @@ static int sec_restrict_fork(void)
 		goto out;
 	}
 
+	/* 3. Restrict case - execute file in /data directory.
+	 */
 	if (sec_check_execpath(current->mm, "/data/")) {
 		ret = 1;
 		goto out;
 	}
 
+	/* 4. Restrict case - parent's privilege is not root. */
 	parent_cred = get_task_cred(parent_tsk);
 	if (!parent_cred)
 		goto out;
@@ -196,7 +203,7 @@ asmlinkage int sys_execve(const char __user *filenamei,
 	error = PTR_ERR(filename);
 	if (IS_ERR(filename))
 		goto out;
-		
+
 #if defined CONFIG_SEC_RESTRICT_FORK
 	if(CHECK_ROOT_UID(current))
 		if(sec_restrict_fork())
@@ -251,7 +258,7 @@ int kernel_execve(const char *filename,
 		  "Ir" (THREAD_START_SP - sizeof(regs)),
 		  "r" (&regs),
 		  "Ir" (sizeof(regs))
-		: "r0", "r1", "r2", "r3", "ip", "lr", "memory");
+		: "r0", "r1", "r2", "r3", "r8", "r9", "ip", "lr", "memory");
 
  out:
 	return ret;

@@ -32,7 +32,7 @@
  */
 
 #include <linux/cpu.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/percpu.h>
 #include <linux/hrtimer.h>
 #include <linux/notifier.h>
@@ -49,9 +49,6 @@
 #include <asm/uaccess.h>
 
 #include <trace/events/timer.h>
-#ifdef CONFIG_SEC_DEBUG
-#include <mach/sec_debug.h>
-#endif
 
 /*
  * The timer bases:
@@ -64,6 +61,7 @@
 DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 {
 
+	.lock = __RAW_SPIN_LOCK_UNLOCKED(hrtimer_bases.lock),
 	.clock_base =
 	{
 		{
@@ -86,6 +84,8 @@ DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 		},
 	}
 };
+
+static DEFINE_PER_CPU(int, hrtimer_base_lock_init) = {-1};
 
 static const int hrtimer_clock_to_base_table[MAX_CLOCKS] = {
 	[CLOCK_REALTIME]	= HRTIMER_BASE_REALTIME,
@@ -822,6 +822,8 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
 	u64 orun = 1;
 	ktime_t delta;
 
+	WARN_ON(hrtimer_is_queued(timer));
+
 	delta = ktime_sub(now, hrtimer_get_expires(timer));
 
 	if (delta.tv64 < 0)
@@ -1219,7 +1221,6 @@ static void __run_hrtimer(struct hrtimer *timer, ktime_t *now)
 	raw_spin_unlock(&cpu_base->lock);
 	trace_hrtimer_expire_entry(timer, now);
 	restart = fn(timer);
-	sec_debug_timer_log(1111, (int)irqs_disabled(), (void*)fn);
 	trace_hrtimer_expire_exit(timer);
 	raw_spin_lock(&cpu_base->lock);
 
@@ -1621,9 +1622,14 @@ SYSCALL_DEFINE2(nanosleep, struct timespec __user *, rqtp,
 static void __cpuinit init_hrtimers_cpu(int cpu)
 {
 	struct hrtimer_cpu_base *cpu_base = &per_cpu(hrtimer_bases, cpu);
+	int *lock_init = &per_cpu(hrtimer_base_lock_init, cpu);
 	int i;
 
-	raw_spin_lock_init(&cpu_base->lock);
+	if ((*lock_init) != cpu) {
+		*lock_init = cpu;
+		raw_spin_lock_init(&cpu_base->lock);
+		pr_info("hrtimer base lock initialized for cpu%d\n", cpu);
+	}
 
 	for (i = 0; i < HRTIMER_MAX_CLOCK_BASES; i++) {
 		cpu_base->clock_base[i].cpu_base = cpu_base;

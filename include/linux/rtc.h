@@ -148,6 +148,10 @@ struct rtc_class_ops {
 	int (*set_time)(struct device *, struct rtc_time *);
 	int (*read_alarm)(struct device *, struct rtc_wkalrm *);
 	int (*set_alarm)(struct device *, struct rtc_wkalrm *);
+#ifdef CONFIG_RTC_AUTO_PWRON	
+	int (*read_bootalarm)(struct device *, struct rtc_wkalrm *);
+	int (*set_bootalarm)(struct device *, struct rtc_wkalrm *);
+#endif	
 	int (*proc)(struct device *, struct seq_file *);
 	int (*set_mmss)(struct device *, unsigned long secs);
 	int (*read_callback)(struct device *, int data);
@@ -202,7 +206,8 @@ struct rtc_device
 	struct hrtimer pie_timer; /* sub second exp, so needs hrtimer */
 	int pie_enabled;
 	struct work_struct irqwork;
-
+	/* Some hardware can't support UIE mode */
+	int uie_unsupported;
 
 #ifdef CONFIG_RTC_INTF_DEV_UIE_EMUL
 	struct work_struct uie_task;

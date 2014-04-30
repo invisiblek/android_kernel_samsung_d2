@@ -13,15 +13,6 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <linux/kernel.h>
@@ -48,12 +39,6 @@
 #define NCM_NDP_HDR_CRC		0x01000000
 #define NCM_NDP_HDR_NOCRC	0x00000000
 
-struct ncm_ep_descs {
-	struct usb_endpoint_descriptor	*in;
-	struct usb_endpoint_descriptor	*out;
-	struct usb_endpoint_descriptor	*notify;
-};
-
 enum ncm_notify_state {
 	NCM_NOTIFY_NONE,		/* don't notify */
 	NCM_NOTIFY_CONNECT,		/* issue CONNECT next */
@@ -66,17 +51,17 @@ struct f_ncm {
 
 	char				ethaddr[14];
 
-	struct ncm_ep_descs		fs;
-	struct ncm_ep_descs		hs;
-
 	struct usb_ep			*notify;
-	struct usb_endpoint_descriptor	*notify_desc;
 	struct usb_request		*notify_req;
 	u8				notify_state;
 	bool				is_open;
 
 	struct ndp_parser_opts		*parser_opts;
 	bool				is_crc;
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	uint16_t    dgramsize;
+	struct net_device* net;
+#endif
 
 	/*
 	 * for notification, it is accessed from both
@@ -107,7 +92,18 @@ static inline unsigned ncm_bitrate(struct usb_gadget *g)
  * If the host can group frames, allow it to do that, 16K is selected,
  * because it's used by default by the current linux host driver
  */
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+#define NTB_DEFAULT_IN_SIZE	16384
+#define NCM_MAX_DGRAM_SIZE	9014
+#define MAX_NDP_DATAGRAMS	1
+#define NTH_NDP_OUT_TOTAL_SIZE \
+	(ALIGN(sizeof(struct usb_cdc_ncm_nth16),	\
+	ntb_parameters.wNdpOutAlignment) +	\
+	sizeof(struct usb_cdc_ncm_ndp16) +	\
+	((MAX_NDP_DATAGRAMS) * sizeof(struct usb_cdc_ncm_dpe16)))
+#else
 #define NTB_DEFAULT_IN_SIZE	USB_CDC_NCM_NTB_MIN_IN_SIZE
+#endif
 #define NTB_OUT_SIZE		16384
 
 /*
@@ -193,12 +189,20 @@ static struct usb_cdc_ether_desc ecm_desc = {
 	/* this descriptor actually adds value, surprise! */
 	/* .iMACAddress = DYNAMIC */
 	.bmEthernetStatistics =	cpu_to_le32(0), /* no statistics */
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	.wMaxSegmentSize =	cpu_to_le16(NCM_MAX_DGRAM_SIZE),
+#else
 	.wMaxSegmentSize =	cpu_to_le16(ETH_FRAME_LEN),
+#endif
 	.wNumberMCFilters =	cpu_to_le16(0),
 	.bNumberPowerFilters =	0,
 };
 
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+#define NCAPS	(USB_CDC_NCM_NCAP_ETH_FILTER |USB_CDC_NCM_NCAP_MAX_DATAGRAM_SIZE)
+#else
 #define NCAPS	(USB_CDC_NCM_NCAP_ETH_FILTER | USB_CDC_NCM_NCAP_CRC_MODE)
+#endif
 
 static struct usb_cdc_ncm_desc ncm_desc = {
 	.bLength =		sizeof ncm_desc,
@@ -461,6 +465,11 @@ static inline void ncm_reset_values(struct f_ncm *ncm)
 
 	ncm->port.fixed_out_len = le32_to_cpu(ntb_parameters.dwNtbOutMaxSize);
 	ncm->port.fixed_in_len = NTB_DEFAULT_IN_SIZE;
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	// Revisit issue for the case of Toyota Head Unit
+	ncm->dgramsize = NCM_MAX_DGRAM_SIZE;//ETH_FRAME_LEN;
+	ncm->net = NULL;
+#endif
 }
 
 /*
@@ -604,6 +613,50 @@ invalid:
 	usb_ep_set_halt(ep);
 	return;
 }
+
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+static void ncm_setdgram_complete(struct usb_ep *ep, struct usb_request *req)
+{
+	/* now for SET_MAX_DATAGRAM_SIZE only */
+	unsigned		dgram_size;
+	struct usb_function	*f = req->context;
+	struct f_ncm		*ncm = func_to_ncm(f);
+	int ntb_min_size = min(ntb_parameters.dwNtbOutMaxSize,
+				ntb_parameters.dwNtbInMaxSize);
+		req->context = NULL;
+	if (req->status || req->actual != req->length) {
+		printk(KERN_ERR"usb:%s * Bad control-OUT transfer *\n",__func__);
+		goto invalid;
+	}
+
+	dgram_size = get_unaligned_le16(req->buf);
+	if (dgram_size < ETH_FRAME_LEN ||
+	    dgram_size > NCM_MAX_DGRAM_SIZE) {
+		printk(KERN_ERR"usb:%s * Got wrong MTU SIZE (%d) from host *\n",__func__, dgram_size);
+		goto invalid;
+	}
+
+	if (dgram_size + NTH_NDP_OUT_TOTAL_SIZE > ntb_min_size) {
+		printk(KERN_ERR"usb:%s * MTU SIZE is larger than NTB SIZE (%d) from host * \n",
+			__func__,dgram_size);
+		printk(KERN_ERR"*************************************************\n");
+		goto invalid;
+	}
+
+	ncm->dgramsize = dgram_size;
+
+	if (ncm->net)
+		ncm->net->mtu = ncm->dgramsize - ETH_HLEN;
+
+	printk(KERN_ERR"usb:%s * Set MTU SIZE %d *\n",__func__,dgram_size);
+
+	return;
+
+invalid:
+	usb_ep_set_halt(ep);
+	return;
+}
+#endif
 
 static int ncm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 {
@@ -756,6 +809,32 @@ static int ncm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		value = 0;
 		break;
 	}
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	case ((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+		| USB_CDC_GET_MAX_DATAGRAM_SIZE:
+	{
+		if (w_length < 2 || w_value != 0 || w_index != ncm->ctrl_id)
+			goto invalid;
+		value = 2;
+		put_unaligned_le16(ncm->dgramsize, req->buf);
+		printk(KERN_ERR"usb:%s * Host asked current MaxDatagramSize, sending %d *\n",
+		     __func__,ncm->dgramsize);
+		break;
+	}
+
+	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
+		| USB_CDC_SET_MAX_DATAGRAM_SIZE:
+	{
+		if (w_length != 2 || w_value != 0 || w_index != ncm->ctrl_id)
+			goto invalid;
+		req->complete = ncm_setdgram_complete;
+		req->length = w_length;
+		req->context = f;
+
+		value = req->length;
+		break;
+	}
+#endif
 
 	/* and disabled in ncm descriptor: */
 	/* case USB_CDC_GET_NET_ADDRESS: */
@@ -802,13 +881,14 @@ static int ncm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		if (ncm->notify->driver_data) {
 			DBG(cdev, "reset ncm control %d\n", intf);
 			usb_ep_disable(ncm->notify);
-		} else {
-			DBG(cdev, "init ncm ctrl %d\n", intf);
-			ncm->notify_desc = ep_choose(cdev->gadget,
-					ncm->hs.notify,
-					ncm->fs.notify);
 		}
-		usb_ep_enable(ncm->notify, ncm->notify_desc);
+
+		if (!(ncm->notify->desc)) {
+			DBG(cdev, "init ncm ctrl %d\n", intf);
+			if (config_ep_by_speed(cdev->gadget, f, ncm->notify))
+				goto fail;
+		}
+		usb_ep_enable(ncm->notify);
 		ncm->notify->driver_data = ncm;
 
 	/* Data interface has two altsettings, 0 and 1 */
@@ -837,14 +917,17 @@ static int ncm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		if (alt == 1) {
 			struct net_device	*net;
 
-			if (!ncm->port.in) {
+			if (!ncm->port.in_ep->desc ||
+			    !ncm->port.out_ep->desc) {
 				DBG(cdev, "init ncm\n");
-				ncm->port.in = ep_choose(cdev->gadget,
-							 ncm->hs.in,
-							 ncm->fs.in);
-				ncm->port.out = ep_choose(cdev->gadget,
-							  ncm->hs.out,
-							  ncm->fs.out);
+				if (config_ep_by_speed(cdev->gadget, f,
+						       ncm->port.in_ep) ||
+				    config_ep_by_speed(cdev->gadget, f,
+						       ncm->port.out_ep)) {
+					ncm->port.in_ep->desc = NULL;
+					ncm->port.out_ep->desc = NULL;
+					goto fail;
+				}
 			}
 
 			/* TODO */
@@ -855,10 +938,17 @@ static int ncm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 				gadget_is_musbhdrc(cdev->gadget)
 				);
 			ncm->port.cdc_filter = DEFAULT_FILTER;
+#ifndef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
 			DBG(cdev, "activate ncm\n");
+#endif
 			net = gether_connect(&ncm->port);
 			if (IS_ERR(net))
 				return PTR_ERR(net);
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+			ncm->net = net;
+			ncm->net->mtu = ncm->dgramsize - ETH_HLEN;
+			printk(KERN_ERR "activate ncm setting MTU size (%d)\n",ncm->net->mtu);
+#endif
 		}
 
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
@@ -927,9 +1017,15 @@ static struct sk_buff *ncm_wrap_ntb(struct gether *port,
 			       max_size - skb->len - ncb_len - crc_len,
 			       GFP_ATOMIC);
 	dev_kfree_skb_any(skb);
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	if (!skb2) {
+		printk(KERN_ERR"Dropped skb \n");
+		return NULL;
+	}
+#else
 	if (!skb2)
 		return NULL;
-
+#endif
 	skb = skb2;
 
 	tmp = (void *) skb_push(skb, ncb_len);
@@ -973,10 +1069,16 @@ static struct sk_buff *ncm_wrap_ntb(struct gether *port,
 	put_ncm(&tmp, opts->dgram_item_len, skb->len - ncb_len);
 	/* (d)wDatagramIndex[1] and  (d)wDatagramLength[1] already zeroed */
 
-	if (skb->len > MAX_TX_NONFIXED)
+	/* Incase of Higher MTU size we do not need to expand and zero off the remaining
+	   In packet size to max_size . This saves bandwidth . e.g for 16K In size max mtu is 9k
+	*/
+#ifndef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+	if (skb->len > MAX_TX_NONFIXED) {
 		memset(skb_put(skb, max_size - skb->len),
 		       0, max_size - skb->len);
-
+		printk(KERN_ERR"usb:%s Expanding the buffer %d \n",__func__,skb->len);
+	}
+#endif
 	return skb;
 }
 
@@ -1127,7 +1229,7 @@ static void ncm_disable(struct usb_function *f)
 	if (ncm->notify->driver_data) {
 		usb_ep_disable(ncm->notify);
 		ncm->notify->driver_data = NULL;
-		ncm->notify_desc = NULL;
+		ncm->notify->desc = NULL;
 	}
 }
 
@@ -1243,13 +1345,6 @@ static int ncm_bind(struct usb_configuration *c, struct usb_function *f)
 	if (!f->descriptors)
 		goto fail;
 
-	ncm->fs.in = usb_find_endpoint(ncm_fs_function,
-			f->descriptors, &fs_ncm_in_desc);
-	ncm->fs.out = usb_find_endpoint(ncm_fs_function,
-			f->descriptors, &fs_ncm_out_desc);
-	ncm->fs.notify = usb_find_endpoint(ncm_fs_function,
-			f->descriptors, &fs_ncm_notify_desc);
-
 	/*
 	 * support all relevant hardware speeds... we expect that when
 	 * hardware is dual speed, all bulk-capable endpoints work at
@@ -1267,13 +1362,6 @@ static int ncm_bind(struct usb_configuration *c, struct usb_function *f)
 		f->hs_descriptors = usb_copy_descriptors(ncm_hs_function);
 		if (!f->hs_descriptors)
 			goto fail;
-
-		ncm->hs.in = usb_find_endpoint(ncm_hs_function,
-				f->hs_descriptors, &hs_ncm_in_desc);
-		ncm->hs.out = usb_find_endpoint(ncm_hs_function,
-				f->hs_descriptors, &hs_ncm_out_desc);
-		ncm->hs.notify = usb_find_endpoint(ncm_hs_function,
-				f->hs_descriptors, &hs_ncm_notify_desc);
 	}
 
 	/*
@@ -1303,9 +1391,9 @@ fail:
 	/* we might as well release our claims on endpoints */
 	if (ncm->notify)
 		ncm->notify->driver_data = NULL;
-	if (ncm->port.out)
+	if (ncm->port.out_ep->desc)
 		ncm->port.out_ep->driver_data = NULL;
-	if (ncm->port.in)
+	if (ncm->port.in_ep->desc)
 		ncm->port.in_ep->driver_data = NULL;
 
 	ERROR(cdev, "%s: can't bind, err %d\n", f->name, status);

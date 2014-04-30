@@ -34,7 +34,7 @@
 #include <linux/fb.h>
 
 #include <asm/fb.h>
-
+#include "dlog.h"
 
     /*
      *  Frame buffer device initialization and setup routines
@@ -967,6 +967,20 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 	    memcmp(&info->var, var, sizeof(struct fb_var_screeninfo))) {
 		u32 activate = var->activate;
 
+		/* When using FOURCC mode, make sure the red, green, blue and
+		 * transp fields are set to 0.
+		 */
+		if ((info->fix.capabilities & FB_CAP_FOURCC) &&
+		    var->grayscale > 1) {
+			if (var->red.offset     || var->green.offset    ||
+			    var->blue.offset    || var->transp.offset   ||
+			    var->red.length     || var->green.length    ||
+			    var->blue.length    || var->transp.length   ||
+			    var->red.msb_right  || var->green.msb_right ||
+			    var->blue.msb_right || var->transp.msb_right)
+				return -EINVAL;
+		}
+
 		if (!info->fbops->fb_check_var) {
 			*var = info->var;
 			goto done;
@@ -1063,7 +1077,7 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct fb_event event;
 	void __user *argp = (void __user *)arg;
 	long ret = 0;
-
+	__DLOG__("Node: %x CMD: %x\n",info->node,cmd);
 	switch (cmd) {
 	case FBIOGET_VSCREENINFO:
 		if (!lock_fb_info(info))
@@ -1175,6 +1189,7 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		else
 			ret = -ENOTTY;
 	}
+	__DLOG__("Node: %x CMD: %x END: %x\n",info->node,cmd,FUNC_END);
 	return ret;
 }
 
@@ -1375,8 +1390,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 		len = info->fix.mmio_len;
 	}
 	mutex_unlock(&info->mm_lock);
-	/* This is an IO map - tell maydump to skip this VMA */
-	vma->vm_flags |= VM_IO | VM_RESERVED;
+
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 	fb_pgprotect(file, vma, start);
 

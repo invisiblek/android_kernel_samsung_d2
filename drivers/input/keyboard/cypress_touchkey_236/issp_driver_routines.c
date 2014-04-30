@@ -30,7 +30,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/module.h>
 #include <linux/ethtool.h>
-#include <mach/msm8960-gpio.h>
+//#include <mach/apq8064-gpio.h>
 
 #include "issp_defs.h"
 #include "issp_errors.h"
@@ -39,6 +39,11 @@
 #include <asm/mach-types.h>
 #define _CYPRESS_TKEY_FW_H
 #include "cypress_tkey_fw.h"
+
+#ifdef CONFIG_KEYBOARD_CYPRESS_TOUCH_236
+#include <linux/i2c/cypress_touchkey.h>
+#endif
+
 
 #define SECURITY_DATA	0xFF
 
@@ -99,17 +104,25 @@ void Delay(unsigned int n)
  The demo does it this way because there is no comm link to get data.
  ****************************************************************************
 */
+extern u32 ic_fw_id;
 void LoadProgramData(unsigned char bBlockNum, unsigned char bBankNum)
 {
  /*   >>> The following call is for demo use only. <<<
      Function InitTargetTestData fills buffer for demo
 */
 	int dataNum;
-	for (dataNum = 0; dataNum < TARGET_DATABUFF_LEN; dataNum++) {
-		abTargetDataOUT[dataNum] =
-		 firmware_data[bBlockNum * TARGET_DATABUFF_LEN + dataNum];
-	}
 
+	if (ic_fw_id & CYPRESS_55_IC_MASK) {
+		for (dataNum = 0; dataNum < TARGET_DATABUFF_LEN; dataNum++) {
+			abTargetDataOUT[dataNum] =
+				firmware_data_20055[bBlockNum * TARGET_DATABUFF_LEN + dataNum];
+		}
+	} else {
+		for (dataNum = 0; dataNum < TARGET_DATABUFF_LEN; dataNum++) {
+			abTargetDataOUT[dataNum] =
+				firmware_data[bBlockNum * TARGET_DATABUFF_LEN + dataNum];
+		}
+	}
 }
 
 
@@ -194,7 +207,19 @@ unsigned char fSDATACheck(void)
 */
 void SCLKHigh(void)
 {
-	gpio_direction_output(GPIO_TOUCHKEY_SCL, 1);
+#if defined(CONFIG_MACH_JF_ATT) || defined(CONFIG_MACH_JF_TMO) || defined(CONFIG_MACH_JF_EUR)
+	if (system_rev < 9)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 1);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 1);
+#elif defined(CONFIG_MACH_JFVE_EUR)
+	gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 1);
+#else
+	if (system_rev < 10)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 1);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 1);
+#endif
 }
 
 
@@ -211,7 +236,20 @@ void SCLKHigh(void)
 */
 void SCLKLow(void)
 {
-	gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+#if defined(CONFIG_MACH_JF_ATT) || defined(CONFIG_MACH_JF_TMO) || defined(CONFIG_MACH_JF_EUR)
+	if (system_rev < 9)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#elif defined(CONFIG_MACH_JFVE_EUR)
+	gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#else
+	if (system_rev < 10)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#endif
+
 }
 
 #ifndef RESET_MODE
@@ -228,7 +266,20 @@ void SCLKLow(void)
 */
 void SetSCLKHiZ(void)
 {
-	gpio_direction_input(GPIO_TOUCHKEY_SCL);
+#if defined(CONFIG_MACH_JF_ATT) || defined(CONFIG_MACH_JF_TMO) || defined(CONFIG_MACH_JF_EUR)
+	if (system_rev < 9)
+		gpio_direction_input(GPIO_TOUCHKEY_SCL);
+	else
+		gpio_direction_input(GPIO_TOUCHKEY_SCL_2);
+#elif defined(CONFIG_MACH_JFVE_EUR)
+	gpio_direction_input(GPIO_TOUCHKEY_SCL_2);
+#else
+	if (system_rev < 10)
+		gpio_direction_input(GPIO_TOUCHKEY_SCL);
+	else
+		gpio_direction_input(GPIO_TOUCHKEY_SCL_2);
+#endif
+
 }
 #endif
 
@@ -245,7 +296,21 @@ void SetSCLKHiZ(void)
 */
 void SetSCLKStrong(void)
 {
-	gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+
+#if defined(CONFIG_MACH_JF_ATT) || defined(CONFIG_MACH_JF_TMO) || defined(CONFIG_MACH_JF_EUR)
+	if (system_rev < 9)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#elif defined(CONFIG_MACH_JFVE_EUR)
+	gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#else
+	if (system_rev < 10)
+		gpio_direction_output(GPIO_TOUCHKEY_SCL, 0);
+	else
+		gpio_direction_output(GPIO_TOUCHKEY_SCL_2, 0);
+#endif
+
 }
 
 
@@ -403,107 +468,77 @@ void SetTargetVDDStrong(void)
 
 static void cypress_power_onoff(int onoff)
 {
-	if (machine_is_GOGH()) {
-		if (onoff)
-			gpio_direction_output(51, 1);
-		else
-			gpio_direction_output(51, 0);
-	} else {
-		int ret, rc;
-		static struct regulator *reg_l29, *reg_l10, *reg_lvs5;
+	int ret;
+	static struct regulator *reg_l23;
+	static struct regulator *reg_l11;
 
-		if (!reg_l29) {
-			reg_l29 = regulator_get(NULL, "8921_l29");
-				if ((machine_is_jaguar()) && (system_rev == 16))
-					ret = regulator_set_voltage(reg_l29,
-					1900000, 1900000);
-				else
-					ret = regulator_set_voltage(reg_l29,
-					1800000, 1800000);
 
-			if (IS_ERR(reg_l29)) {
-				pr_err("could not get 8921_l29, rc = %ld\n",
-					PTR_ERR(reg_l29));
-				return;
-			}
-		}
+	if (!reg_l23) {
+		reg_l23 = regulator_get(NULL, "8921_l23");
+		ret = regulator_set_voltage(reg_l23, 1800000, 1800000);
 
-		if (machine_is_APEXQ()) {
-			if (!reg_lvs5) {
-				reg_lvs5 = regulator_get(NULL, "8921_lvs5");
-				if (IS_ERR(reg_lvs5)) {
-					pr_err("could not get 8921_lvs5, rc = %ld\n",
-						PTR_ERR(reg_lvs5));
-					return;
-				}
-			}
-		} else {
-		if (!reg_l10) {
-			reg_l10 = regulator_get(NULL, "8921_l10");
-			if (machine_is_jaguar())
-				ret = regulator_set_voltage(reg_l10,
-				2900000, 2900000);
-			else
-				ret = regulator_set_voltage(reg_l10,
-				3000000, 3000000);
-			if (IS_ERR(reg_l10)) {
-				pr_err("could not get 8921_l10, rc = %ld\n",
-					PTR_ERR(reg_l10));
-				return;
-			}
-		}
-		}
-
-		if (onoff) {
-			ret = regulator_enable(reg_l29);
-			if (machine_is_APEXQ())
-				rc = regulator_enable(reg_lvs5);
-			else
-			rc =  regulator_enable(reg_l10);
-
-			if (ret) {
-				pr_err("enable l29 failed, rc=%d\n", ret);
-				return;
-			}
-
-			if (rc) {
-				if (machine_is_APEXQ())
-					pr_err("enable lvs5 failed, rc=%d\n",
-									rc);
-				else
-					pr_err("enable l10 failed, rc=%d\n",
-									rc);
-				return;
-			}
-			pr_info("cypress_power_on is finished.\n");
-		} else {
-			ret = regulator_disable(reg_l29);
-			if (machine_is_APEXQ())
-				rc = regulator_disable(reg_lvs5);
-			else
-			rc =  regulator_disable(reg_l10);
-			if (ret) {
-				pr_err("disable l29 failed, rc=%d\n", ret);
-				return;
-			}
-			if (rc) {
-				if (machine_is_APEXQ())
-					pr_err("disable lvs5 failed, rc=%d\n",
-									rc);
-				else
-					pr_err("enable l10 failed, rc=%d\n",
-									rc);
-				return;
-			}
-			pr_info("cypress_power_off is finished.\n");
+		if (IS_ERR(reg_l23)) {
+			printk(KERN_ERR"could not get 8921_l23, rc = %ld\n",
+				PTR_ERR(reg_l23));
+			return;
 		}
 	}
+
+	if (!reg_l11) {
+		reg_l11 = regulator_get(NULL, "8921_l11");
+		ret = regulator_set_voltage(reg_l11, 3300000, 3300000);
+
+		if (IS_ERR(reg_l11)) {
+			printk(KERN_ERR"could not get 8921_l11, rc = %ld\n",
+				PTR_ERR(reg_l11));
+			return;
+		}
+	}
+
+	if (onoff) {
+		ret = regulator_enable(reg_l23);
+		if (ret) {
+			printk(KERN_ERR"enable l23 failed, rc=%d\n", ret);
+			return;
+		}
+		ret = regulator_enable(reg_l11);
+		if (ret) {
+			printk(KERN_ERR"enable l11 failed, rc=%d\n", ret);
+			return;
+		}
+		printk(KERN_DEBUG"cypress_power_on is finished.\n");
+	} else {
+		ret = regulator_disable(reg_l23);
+		if (ret) {
+			printk(KERN_ERR"disable l23 failed, rc=%d\n", ret);
+			return;
+		}
+
+		ret = regulator_disable(reg_l11);
+		if (ret) {
+			printk(KERN_ERR"disable l11 failed, rc=%d\n", ret);
+			return;
+		}
+		printk(KERN_DEBUG"cypress_power_off is finished.\n");
+	}
 }
+
 
 void ApplyTargetVDD(void)
 {
 	gpio_direction_input(GPIO_TOUCHKEY_SDA);
-	gpio_direction_input(GPIO_TOUCHKEY_SCL);
+#if defined(CONFIG_MACH_JF_ATT) || defined(CONFIG_MACH_JF_TMO) || defined(CONFIG_MACH_JF_EUR)
+	if (system_rev < 9)
+		gpio_direction_input(GPIO_TOUCHKEY_SCL);
+	else
+		gpio_direction_input(GPIO_TOUCHKEY_SCL_2);
+#else
+	if (system_rev < 10)
+		gpio_direction_input(GPIO_TOUCHKEY_SCL);
+	else
+		gpio_direction_input(GPIO_TOUCHKEY_SCL_2);
+#endif
+
 	cypress_power_onoff(1);
 }
 
@@ -527,4 +562,5 @@ void RemoveTargetVDD(void)
 
 #endif  /* (PROJECT_REV_) */
 /* end of file ISSP_Drive_Routines.c */
+
 

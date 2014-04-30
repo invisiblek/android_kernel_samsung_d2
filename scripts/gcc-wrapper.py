@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2011, The Linux Foundation. All rights reserved.
+# Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -30,6 +30,7 @@
 # Invoke gcc, looking for warnings, and causing a failure if there are
 # non-whitelisted warnings.
 
+import errno
 import re
 import os
 import sys
@@ -39,7 +40,29 @@ import subprocess
 # force LANG to be set to en_US.UTF-8 to get consistent warnings.
 
 allowed_warnings = set([
-    "return_address.c:62"
+    "alignment.c:327",
+    "mmu.c:602",
+    "return_address.c:62",
+	"swab.h:49",
+   "SemaLambda.cpp:946",
+   "CGObjCGNU.cpp:1414",
+   "BugReporter.h:146",
+   "RegionStore.cpp:1904",
+   "SymbolManager.cpp:484",
+   "RewriteObjCFoundationAPI.cpp:737",
+   "RewriteObjCFoundationAPI.cpp:696",
+   "CommentParser.cpp:394",
+   "CommentParser.cpp:391",
+   "CommentParser.cpp:356",
+   "LegalizeDAG.cpp:3646",
+   "IRBuilder.h:844",
+   "DataLayout.cpp:193",
+   "transport.c:653",
+   "xt_socket.c:307",
+   "xt_socket.c:161",
+   "inet_hashtables.h:356",
+   "xc4000.c:1049",
+   "xc4000.c:1063",	
  ])
 
 # Capture the name of the object file, can find it.
@@ -73,12 +96,20 @@ def run_gcc():
 
     compiler = sys.argv[0]
 
-    proc = subprocess.Popen(args, stderr=subprocess.PIPE)
-    for line in proc.stderr:
-        print line,
-        interpret_warning(line)
+    try:
+        proc = subprocess.Popen(args, stderr=subprocess.PIPE)
+        for line in proc.stderr:
+            print line,
+            interpret_warning(line)
 
-    result = proc.wait()
+        result = proc.wait()
+    except OSError as e:
+        result = e.errno
+        if result == errno.ENOENT:
+            print args[0] + ':',e.strerror
+            print 'Is your PATH set correctly?'
+        else:
+            print ' '.join(args), str(e)
 
     return result
 

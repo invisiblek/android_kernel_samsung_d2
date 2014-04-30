@@ -284,7 +284,7 @@ struct mms_ts_info {
 
 	char				*fw_name;
 	struct early_suspend		early_suspend;
-#if TOUCH_BOOSTER
+#ifdef TOUCH_BOOSTER
 	struct delayed_work work_dvfs_off;
 	struct delayed_work	work_dvfs_chg;
 	bool	dvfs_lock_status;
@@ -396,7 +396,7 @@ struct tsp_cmd tsp_cmds[] = {
 };
 #endif
 
-#if TOUCH_BOOSTER
+#ifdef TOUCH_BOOSTER
 static void change_dvfs_lock(struct work_struct *work)
 {
 	struct mms_ts_info *info = container_of(work,
@@ -404,7 +404,7 @@ static void change_dvfs_lock(struct work_struct *work)
 	int ret;
 
 	mutex_lock(&info->dvfs_lock);
-	ret = cpufreq_set_limit(TOUCH_BOOSTER_FIRST_STOP, 0);
+	ret = set_freq_limit(DVFS_TOUCH_ID, MIN_TOUCH_LIMIT_SECOND);
 	mutex_unlock(&info->dvfs_lock);
 
 	if (ret < 0)
@@ -419,8 +419,7 @@ static void set_dvfs_off(struct work_struct *work)
 	struct mms_ts_info *info = container_of(work,
 				struct mms_ts_info, work_dvfs_off.work);
 	mutex_lock(&info->dvfs_lock);
-	cpufreq_set_limit(TOUCH_BOOSTER_FIRST_STOP, 0);
-	cpufreq_set_limit(TOUCH_BOOSTER_SECOND_STOP, 0);
+	set_freq_limit(DVFS_TOUCH_ID, -1);
 	info->dvfs_lock_status = false;
 	mutex_unlock(&info->dvfs_lock);
 
@@ -429,7 +428,7 @@ static void set_dvfs_off(struct work_struct *work)
 
 static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 {
-	int ret = 0, ret2 = 0;
+	int ret = 0;
 
 	mutex_lock(&info->dvfs_lock);
 	if (on == 0) {
@@ -441,11 +440,9 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 	} else if (on == 1) {
 		cancel_delayed_work(&info->work_dvfs_off);
 		if (!info->dvfs_lock_status) {
-			ret = cpufreq_set_limit(TOUCH_BOOSTER_SECOND_START, 0);
-			ret2 = cpufreq_set_limit(TOUCH_BOOSTER_FIRST_START, 0);
-			if (ret < 0 || ret2 < 0)
-				pr_err("%s: cpu lock failed(%d, %d)\n",\
-							__func__, ret, ret2);
+			ret = set_freq_limit(DVFS_TOUCH_ID, MIN_TOUCH_LIMIT);
+			if(ret < 0)
+				pr_err("%s: cpu lock failed %d\n", __func__, ret);
 
 			schedule_delayed_work(&info->work_dvfs_chg,
 				msecs_to_jiffies(TOUCH_BOOSTER_CHG_TIME));
@@ -482,7 +479,7 @@ static void release_all_fingers(struct mms_ts_info *info)
 					   false);
 	}
 	input_sync(info->input_dev);
-#if TOUCH_BOOSTER
+#ifdef TOUCH_BOOSTER
 	set_dvfs_lock(info, 2);
 	pr_info("[TSP] dvfs_lock free.\n ");
 #endif
@@ -680,7 +677,7 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 		input_mt_report_slot_state(info->input_dev,
 					   MT_TOOL_FINGER, true);
 		input_report_abs(info->input_dev, ABS_MT_WIDTH_MAJOR, tmp[4]);
-#if defined(CONFIG_MACH_K2_KDI)
+#if defined(CONFIG_MACH_M2_KDI)
 		input_report_abs(info->input_dev, ABS_MT_POSITION_X,
 			(info->max_x - x));
 		input_report_abs(info->input_dev, ABS_MT_POSITION_Y,
@@ -717,7 +714,7 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 			touch_is_pressed++;
 	}
 
-#if TOUCH_BOOSTER
+#ifdef TOUCH_BOOSTER
 	set_dvfs_lock(info, !!touch_is_pressed);
 #endif
 
@@ -3014,7 +3011,7 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		goto err_reg_input_dev;
 	}
 
-#if TOUCH_BOOSTER
+#ifdef TOUCH_BOOSTER
 	mutex_init(&info->dvfs_lock);
 	INIT_DELAYED_WORK(&info->work_dvfs_off, set_dvfs_off);
 	INIT_DELAYED_WORK(&info->work_dvfs_chg, change_dvfs_lock);

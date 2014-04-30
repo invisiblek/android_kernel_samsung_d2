@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,7 +53,7 @@ int32_t msm_camera_i2c_txdata(struct msm_camera_i2c_client *dev_client,
 	rc = i2c_transfer(dev_client->client->adapter, msg, 1);
 	if (rc < 0)
 		S_I2C_DBG("msm_camera_i2c_txdata faild 0x%x\n", saddr);
-	return 0;
+	return rc;
 }
 
 int32_t msm_camera_i2c_write(struct msm_camera_i2c_client *client,
@@ -252,7 +252,7 @@ int32_t msm_camera_i2c_write_tbl(struct msm_camera_i2c_client *client,
 		enum msm_camera_i2c_data_type dt;
 		if (reg_conf_tbl->cmd_type == MSM_CAMERA_I2C_CMD_POLL) {
 			rc = msm_camera_i2c_poll(client, reg_conf_tbl->reg_addr,
-				reg_conf_tbl->reg_data, reg_conf_tbl->dt);
+				reg_conf_tbl->reg_addr, reg_conf_tbl->dt);
 		} else {
 			if (reg_conf_tbl->dt == 0)
 				dt = data_type;
@@ -425,5 +425,3 @@ int32_t msm_sensor_write_all_conf_array(struct msm_camera_i2c_client *client,
 	}
 	return rc;
 }
-
-

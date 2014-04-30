@@ -43,7 +43,7 @@ struct tcbd_queue {
 };
 
 TCBB_FUNC void tcbd_init_queue(
-	struct tcbd_queue *_queue, u8* buffer, s32 _buff_size);
+	struct tcbd_queue *_queue, u8 *buffer, s32 _buff_size);
 TCBB_FUNC void tcbd_deinit_queue(struct tcbd_queue *_queue);
 
 TCBB_FUNC s32 tcbd_enqueue(

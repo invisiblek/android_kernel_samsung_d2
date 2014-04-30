@@ -69,9 +69,16 @@ static const struct max77693_irq_data max77693_irqs[] = {
 	DECLARE_IRQ(MAX77693_TOPSYS_IRQLOWSYS_INT,	TOPSYS_INT, 1 << 3),
 
 	DECLARE_IRQ(MAX77693_CHG_IRQ_BYP_I,	CHG_INT, 1 << 0),
+#if defined(CONFIG_CHARGER_MAX77803)
+	DECLARE_IRQ(MAX77693_CHG_IRQ_BATP_I,	CHG_INT, 1 << 2),
+#else
 	DECLARE_IRQ(MAX77693_CHG_IRQ_THM_I,	CHG_INT, 1 << 2),
+#endif
 	DECLARE_IRQ(MAX77693_CHG_IRQ_BAT_I,	CHG_INT, 1 << 3),
 	DECLARE_IRQ(MAX77693_CHG_IRQ_CHG_I,	CHG_INT, 1 << 4),
+#if defined(CONFIG_CHARGER_MAX77803)
+	DECLARE_IRQ(MAX77693_CHG_IRQ_WCIN_I,	CHG_INT, 1 << 5),
+#endif
 	DECLARE_IRQ(MAX77693_CHG_IRQ_CHGIN_I,	CHG_INT, 1 << 6),
 
 	DECLARE_IRQ(MAX77693_MUIC_IRQ_INT1_ADC,	MUIC_INT1, 1 << 0),
@@ -170,6 +177,9 @@ static irqreturn_t max77693_irq_thread(int irq, void *data)
 {
 	struct max77693_dev *max77693 = data;
 	u8 irq_reg[MAX77693_IRQ_GROUP_NR] = {};
+#if defined(CONFIG_SEC_PRODUCT_8930)
+	u8 tmp_irq_reg[MAX77693_IRQ_GROUP_NR] = {};
+#endif
 	u8 irq_src;
 	int ret;
 	int i;
@@ -217,7 +227,17 @@ clear_retry:
 		max77693_bulk_read(max77693->muic,
 		MAX77693_MUIC_REG_INT1,
 		MAX77693_NUM_IRQ_MUIC_REGS,
+#if defined(CONFIG_SEC_PRODUCT_8930)
+				&tmp_irq_reg[MUIC_INT1]);
+#else
 				&irq_reg[MUIC_INT1]);
+#endif
+#if defined(CONFIG_SEC_PRODUCT_8930)
+		/* Or temp irq register to irq register for if it retries */
+		for (i = MUIC_INT1; i < MAX77693_IRQ_GROUP_NR; i++)
+			irq_reg[i] |= tmp_irq_reg[i];
+#endif
+
 		pr_info("%s: muic interrupt(0x%02x, 0x%02x, 0x%02x)\n",
 			__func__, irq_reg[MUIC_INT1],
 			irq_reg[MUIC_INT2], irq_reg[MUIC_INT3]);
@@ -226,8 +246,10 @@ clear_retry:
 	pr_debug("%s: irq gpio post-state(0x%02x)\n", __func__,
 		gpio_get_value(max77693->irq_gpio));
 
-	if (gpio_get_value(max77693->irq_gpio) == 0)
+	if (gpio_get_value(max77693->irq_gpio) == 0) {
+		pr_warn("%s: irq_gpio is not High!\n", __func__);
 		goto clear_retry;
+	}
 
 	/* Apply masking */
 	for (i = 0; i < MAX77693_IRQ_GROUP_NR; i++) {

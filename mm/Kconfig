@@ -117,7 +117,7 @@ config SPARSEMEM_VMEMMAP_ENABLE
 
 config SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
 	def_bool y
-	depends on SPARSEMEM && X86_64
+	depends on SPARSEMEM
 
 config SPARSEMEM_VMEMMAP
 	bool "Sparse Memory virtual memmap"
@@ -129,6 +129,15 @@ config SPARSEMEM_VMEMMAP
 	 efficient option when sufficient kernel resources are available.
 
 config HAVE_MEMBLOCK
+	boolean
+
+config HAVE_MEMBLOCK_NODE_MAP
+	boolean
+
+config ARCH_DISCARD_MEMBLOCK
+	boolean
+
+config NO_BOOTMEM
 	boolean
 
 # eventually, we can have this option just 'select SPARSEMEM'
@@ -189,7 +198,7 @@ config COMPACTION
 config MIGRATION
 	bool "Page migration"
 	def_bool y
-	depends on NUMA || ARCH_ENABLE_MEMORY_HOTREMOVE || COMPACTION
+	depends on NUMA || ARCH_ENABLE_MEMORY_HOTREMOVE || COMPACTION || CMA
 	help
 	  Allows the migration of the physical location of pages of processes
 	  while the virtual addresses are not changed. This is useful in
@@ -356,7 +365,7 @@ config CLEANCACHE
 	  for clean pages that the kernel's pageframe replacement algorithm
 	  (PFRA) would like to keep around, but can't since there isn't enough
 	  memory.  So when the PFRA "evicts" a page, it first attempts to use
-	  cleancacne code to put the data contained in that page into
+	  cleancache code to put the data contained in that page into
 	  "transcendent memory", memory that is not directly accessible or
 	  addressable by the kernel and is of unknown and possibly
 	  time-varying size.  And when a cleancache-enabled
@@ -370,3 +379,25 @@ config CLEANCACHE
 	  in a negligible performance hit.
 
 	  If unsure, say Y to enable cleancache
+
+config MEMORY_HOLE_CARVEOUT
+        bool
+        help
+          MEMORY_HOLE_CARVEOUT is needed to include the msm_mem_hole driver
+          which is needed to enable/disable memblock-remove features for
+          device tree nodes that set compatible="qcom,msm-mem-hole". The
+          corresponding device tree node provides the address and size of
+          the memory corresponding to the hole to be removed using memblock-
+          remove.
+
+config USE_USER_ACCESSIBLE_TIMERS
+	bool "Enables timers accessible from userspace"
+	depends on MMU
+	help
+	  User-accessible timers allow the kernel to map kernel timer
+	  registers to a userspace accessible page, to allow faster
+	  access to time information.  This flag will enable the
+	  interface code in the main kernel.  However, there are
+	  architecture-specific code that will need to be enabled
+	  separately.
+

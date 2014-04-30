@@ -28,6 +28,7 @@ enum {
 	DEBUG_VERBOSE = 1U << 3,
 };
 static int debug_mask = DEBUG_USER_STATE | DEBUG_SUSPEND;
+
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
 static DEFINE_MUTEX(early_suspend_lock);
@@ -78,14 +79,13 @@ static void early_suspend(struct work_struct *work)
 
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
+
 	if (state == SUSPEND_REQUESTED)
 		state |= SUSPENDED;
 	else
 		abort = 1;
 	spin_unlock_irqrestore(&state_lock, irqflags);
 
-	if (debug_mask & DEBUG_SUSPEND)
-		pr_debug("early_suspend: begin\n");
 	if (abort) {
 		if (debug_mask & DEBUG_SUSPEND)
 			pr_info("early_suspend: abort, state %d\n", state);
@@ -97,20 +97,16 @@ static void early_suspend(struct work_struct *work)
 		pr_info("early_suspend: call handlers\n");
 	list_for_each_entry(pos, &early_suspend_handlers, link) {
 		if (pos->suspend != NULL) {
-			pr_debug("early_suspend: calling %pf\n", pos->suspend);
+			if (debug_mask & DEBUG_VERBOSE)
+				pr_info("early_suspend: calling %pf\n", pos->suspend);
 			pos->suspend(pos);
 		}
 	}
-
-#ifdef CONFIG_SEC_PM_DEBUG
 	set_debug_lock_timer(1, msecs_to_jiffies(5000));
-#endif
 
 	mutex_unlock(&early_suspend_lock);
 
 	suspend_sys_sync_queue();
-	if (debug_mask & DEBUG_SUSPEND)
-		pr_debug("early_suspend: done\n");
 abort:
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED_AND_SUSPENDED)
@@ -123,20 +119,17 @@ static void late_resume(struct work_struct *work)
 	struct early_suspend *pos;
 	unsigned long irqflags;
 	int abort = 0;
-	if (debug_mask & DEBUG_SUSPEND)
-		pr_debug("late_resume: begin\n");
 
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
+
 	if (state == SUSPENDED)
 		state &= ~SUSPENDED;
 	else
 		abort = 1;
 	spin_unlock_irqrestore(&state_lock, irqflags);
 
-#ifdef CONFIG_SEC_PM_DEBUG
 	set_debug_lock_timer(0, 0);
-#endif
 
 	if (abort) {
 		if (debug_mask & DEBUG_SUSPEND)
@@ -147,7 +140,8 @@ static void late_resume(struct work_struct *work)
 		pr_info("late_resume: call handlers\n");
 	list_for_each_entry_reverse(pos, &early_suspend_handlers, link) {
 		if (pos->resume != NULL) {
-			pr_debug("late_resume: calling %pf\n", pos->resume);
+			if (debug_mask & DEBUG_VERBOSE)
+				pr_info("late_resume: calling %pf\n", pos->resume);
 
 			pos->resume(pos);
 		}

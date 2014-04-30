@@ -54,10 +54,14 @@ Copyright (C) 2011, Samsung Electronics. All rights reserved.
 #include <linux/time.h>
 #include <linux/timer.h>
 #include <linux/wakelock.h>
-#include "samsung_cmc624.h"
+#include <linux/i2c/samsung_cmc624.h>
+#include <linux/mfd/pm8xxx/pm8038.h>
+
 static struct class *mdnie_class;
 struct device *tune_cmc624_dev;
 struct device *tune_mdnie_dev_cmc;
+
+extern struct str_blind_tuning blind_tune_value;
 
 #define FALSE 0
 #define TRUE  1
@@ -151,6 +155,11 @@ static ssize_t scenario_store(struct device *dev,
 		return size;
 	}
 
+#if defined(CONFIG_TDMB)
+	if (value == mDNIe_DMB_MODE)
+		value = 10;
+#endif
+
 	if (cmc624_state.suspended == TRUE) {
 		if (value >= COLOR_TONE_1)
 			cmc624_state.browser_scenario = value;
@@ -176,9 +185,9 @@ static DEVICE_ATTR(scenario, 0664, scenario_show, scenario_store);
  * # Tuning Sysfs node
  * #
  * ##########################################################*/
-#define MAX_FILE_NAME 128
+#define MAX_FILE_NAME 50
 static int tuning_enable;
-static char tuning_filename[MAX_FILE_NAME];
+static char tuning_filename[MAX_FILE_NAME] = {0, };
 static ssize_t tuning_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 
@@ -194,7 +203,8 @@ static ssize_t tuning_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	memset(tuning_filename, 0, sizeof(tuning_filename));
-	sprintf(tuning_filename, "%s%s", TUNING_FILE_PATH, buf);
+	strcpy(tuning_filename, "/sdcard/tuning/");
+	strncat(tuning_filename, buf, size-1);
 
 	pr_debug("[CMC624:INFO]:%s:%s\n", __func__, tuning_filename);
 
@@ -253,43 +263,182 @@ static DEVICE_ATTR(outdoor, 0664, outdoor_show, outdoor_store);
 
 /* ##########################################################
  * #
- * # MDNIE NEGATIVE Sysfs node
+ * # MDNIE CABC Sysfs node
  * #
  * ##########################################################*/
-static ssize_t negative_show(struct device *dev,
+static ssize_t cabc_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "Current negative Value : %s\n",
-		(cmc624_state.negative == 0) ? "Disabled" : "Enabled");
+	return sprintf(buf, "Current CABC Value : %s\n",
+		(cmc624_state.cabc_mode == 0) ? "Disabled" : "Enabled");
 }
 
-static ssize_t negative_store(struct device *dev,
+static ssize_t cabc_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int value;
+
+	sscanf(buf, "%d", &value);
+	pr_debug("[CMC624:INFO] set cabc : %d\n", value);
+
+	if (value < CABC_OFF_MODE || value >= MAX_CABC_MODE) {
+		pr_debug("[CMC624:ERROR] : wrong cabc mode value : %d\n",
+			value);
+		return size;
+	}
+
+	if (cmc624_state.suspended == TRUE) {
+		cmc624_state.cabc_mode = value;
+		return size;
+	}
+
+	cabc_onoff_ctrl(value);
+	
+	return size;
+}
+
+static DEVICE_ATTR(cabc, 0664, cabc_show, cabc_store);
+
+#if defined(CONFIG_FB_EBOOK_PANEL_SCENARIO)
+/* ##########################################################
+ * #
+ * # MDNIE EBOOK Sysfs node
+ * #
+ * ##########################################################*/
+static ssize_t ebook_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "Current ebook Value : %s\n",
+		(cmc624_state.ebook == 0) ? "Disabled" : "Enabled");
+}
+
+static ssize_t ebook_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	int ret;
 	int value;
 
 	sscanf(buf, "%d", &value);
-	pr_debug("[CMC624:INFO] set negative : %d\n", value);
+	pr_debug("[CMC624:INFO] set ebook : %d\n", value);
 
-	if (value < NEGATIVE_OFF_MODE || value >= MAX_NEGATIVE_MODE) {
-		pr_debug("[CMC624:ERROR] : wrong negative mode value : %d\n",
+	if (value < EBOOK_OFF || value >= MAX_EBOOK_MODE) {
+		pr_debug("[CMC624:ERROR] : wrong ebook mode value : %d\n",
 			value);
 		return size;
 	}
 
 	if (cmc624_state.suspended == TRUE) {
-		cmc624_state.negative = value;
+		cmc624_state.ebook = value;
 		return size;
 	}
-	ret = apply_negative_tune_value(value, cmc624_state.cabc_mode);
+	ret = apply_ebook_tune_value(value, cmc624_state.cabc_mode);
 	if (ret != 0)
-		pr_debug("[CMC624:ERROR] ERROR : set negative value faild\n");
+		pr_debug("[CMC624:ERROR] ERROR : set ebook value faild\n");
 
 	return size;
 }
 
-static DEVICE_ATTR(negative, 0664, negative_show, negative_store);
+static DEVICE_ATTR(ebook, 0664, ebook_show, ebook_store);
+#endif
+
+/* ##########################################################
+ * #
+ * # MDNIE Accessibility Sysfs node
+ * #
+ * ##########################################################*/
+
+static ssize_t accessibility_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	char *pos = buf;
+	//unsigned short *wbuf;
+	struct cmc624RegisterSet *wbuf;
+	int i = 0;
+
+	pr_debug("[CMC624:INFO] %s\n", __func__);
+
+	pos += sprintf(pos, "%d, ", cmc624_state.blind);
+	if (cmc624_state.blind == COLOR_BLIND) {
+			wbuf = blind_tune_value.value[cmc624_state.cabc_mode].value;
+			while ( i != MDNIE_COLOR_BLIND_CMD) {
+				if (likely(wbuf[i].Data >= 0x71 && wbuf[i].Data<= 0x79))
+					pos += sprintf(pos, "0x%04x, ", wbuf[i+1].Data);
+				i++;
+			}
+	}
+	pos += sprintf(pos, "\n");
+
+	return pos - buf;
+}
+
+static ssize_t accessibility_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t size)
+{
+
+	unsigned int value, s[9], cabc, i = 0;
+	int ret;
+	struct cmc624RegisterSet *wbuf;
+
+	ret = sscanf(buf, "%d %x %x %x %x %x %x %x %x %x",
+		&value, &s[0], &s[1], &s[2], &s[3],
+		&s[4], &s[5], &s[6], &s[7], &s[8]);
+
+	pr_debug("[CMC624:INFO] set accesibility : %d\n", value);
+	pr_info("%s cmd_value : %d size : %d\n", __func__, value, size);
+
+	if (ret < 0)
+		return ret;
+	else {
+		if (value >= ACCESSIBILITY_MAX)
+			value = ACCESSIBILITY_OFF;
+		
+		if (value == COLOR_BLIND) {
+			if (ret != 10)
+				return -EINVAL;
+			for (cabc = 0; cabc < MAX_CABC_MODE; cabc++) {
+					wbuf = blind_tune_value.value[cabc].value;
+					while ( i != MDNIE_COLOR_BLIND_CMD) {
+						if (likely(wbuf[i].RegAddr >= 0x71 && wbuf[i].RegAddr <= 0x79)) {
+							wbuf[i].Data = s[wbuf[i].RegAddr - 0x71];
+						}
+						i++;
+//						pr_info("%s : wbuf[%d](0x%04x)\n", __func__, i, wbuf[i].Data );
+					}
+				i = 0;
+			}
+			ret = apply_blind_tune_value(value, cmc624_state.cabc_mode);
+			if (ret != 0) {
+				pr_err("[CMC624:ERROR] ERROR : set blind value failed.\n");
+			}
+			
+			cmc624_state.blind = value;
+			cmc624_state.negative = ACCESSIBILITY_OFF;
+		} else if(value == NEGATIVE) {
+			ret = apply_negative_tune_value(value, cmc624_state.cabc_mode);
+			if (ret != 0) {
+				pr_err("[CMC624:ERROR] ERROR : set negative value failed.\n");
+			}
+
+			cmc624_state.blind = ACCESSIBILITY_OFF;
+			cmc624_state.negative = value;
+		} else if (value == ACCESSIBILITY_OFF) {
+			ret = apply_blind_tune_value(value, cmc624_state.cabc_mode);
+			if (ret != 0) {
+				pr_err("[CMC624:ERROR] ERROR : set blind value failed.\n");
+			}
+			
+			ret = apply_negative_tune_value(value, cmc624_state.cabc_mode);
+			if (ret != 0) {
+				pr_err("[CMC624:ERROR] ERROR : set negative value failed.\n");
+			}
+		} else
+			pr_info("%s ACCESSIBILITY_MAX", __func__);
+	}
+	return size;
+}
+static DEVICE_ATTR(accessibility, 0664, accessibility_show, accessibility_store);
 
 
 /* ##########################################################
@@ -488,11 +637,7 @@ int cmc624_sysfs_init(void)
 			dev_attr_outdoor.attr.name);
 		ret = -1;
 	}
-	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_negative) < 0) {
-		pr_debug("[CMC624:ERROR] device_create_file(%s)\n",\
-			dev_attr_negative.attr.name);
-		ret = -1;
-	}
+
 	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_mdnie_temp) < 0) {
 		pr_debug("[CMC624:ERROR] device_crate_filed(%s)\n",\
 			dev_attr_mdnie_temp.attr.name);
@@ -501,6 +646,26 @@ int cmc624_sysfs_init(void)
 	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_mode) < 0) {
 		pr_debug("[CMC624:ERROR] device_crate_filed(%s)\n",\
 			dev_attr_mode.attr.name);
+		ret = -1;
+	}
+
+#if defined(CONFIG_FB_EBOOK_PANEL_SCENARIO)
+	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_ebook) < 0) {
+		pr_debug("[CMC624:ERROR] device_create_file(%s)\n",\
+			dev_attr_ebook.attr.name);
+		ret = -1;
+	}
+#endif
+
+	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_cabc) < 0) {
+		pr_debug("[CMC624:ERROR] device_create_file(%s)\n",\
+			dev_attr_cabc.attr.name);
+		ret = -1;
+	}
+
+	if (device_create_file(tune_mdnie_dev_cmc, &dev_attr_accessibility) < 0) {
+		pr_debug("[CMC624:ERROR] device_create_file(%s)\n",\
+			dev_attr_accessibility.attr.name);
 		ret = -1;
 	}
 #if DUMP_CMC624_REGISTER

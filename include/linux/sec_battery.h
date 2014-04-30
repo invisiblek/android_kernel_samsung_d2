@@ -46,6 +46,9 @@ struct sec_bat_platform_data {
 	int lpm_low_recovery;
 	int batt_int;
 	int wpc_charging_current;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	unsigned int charging_fullcharged_2nd_duration;
+#endif
 };
 
 #define ADJUST_RCOMP_WITH_CHARGING_STATUS
@@ -71,14 +74,23 @@ struct sec_bat_platform_data {
 #define RE_CHG_COND_COUNT		4
 #define TEMP_BLOCK_COUNT		2
 #define BAT_DET_COUNT		2
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+#define FULL_CHG_COND_COUNT		1
+#else
 #define FULL_CHG_COND_COUNT		2
+#endif
 #define FULL_CHARGE_COND_VOLTAGE    4000000
 #define INIT_CHECK_COUNT	4
 
-#define MAX_BATT_ADC_CHAN 3
+#define MAX_BATT_ADC_CHAN 	3
 
-#define TEMP_GPIO	PM8XXX_AMUX_MPP_7
+#define TEMP_GPIO		PM8XXX_AMUX_MPP_7
 #define TEMP_ADC_CHNNEL		ADC_MPP_1_AMUX6
+
+#define DEFAULT_HIGH_BLOCK_TEMP         650
+#define DEFAULT_HIGH_RECOVER_TEMP       430
+#define DEFAULT_LOW_BLOCK_TEMP          -50
+#define DEFAULT_LOW_RECOVER_TEMP        0
 
 #define BATT_TYPE_NORMAL		0 /* 4.2V battery */
 #define BATT_TYPE_JAGUAR		1 /* 4.35V, new active battery */

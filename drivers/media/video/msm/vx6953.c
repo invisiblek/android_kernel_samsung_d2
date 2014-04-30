@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -164,7 +164,7 @@ struct vx6953_ctrl_t {
 	const struct  msm_camera_sensor_info *sensordata;
 
 	uint32_t sensormode;
-	uint32_t fps_divider;   	/* init to 1 * 0x00000400 */
+	uint32_t fps_divider;		/* init to 1 * 0x00000400 */
 	uint32_t pict_fps_divider;  /* init to 1 * 0x00000400 */
 	uint16_t fps;
 
@@ -3662,5 +3662,3 @@ void vx6953_exit(void)
 {
 	i2c_del_driver(&vx6953_i2c_driver);
 }
-
-

@@ -65,10 +65,10 @@ static inline void tcpal_split_stream(struct tcbd_irq_data *irq_data)
 	if (ret == 0 && !irq_error)
 		tcbd_split_stream(0, buff_read, size);
 	else {
-		tcbd_debug(DEBUG_ERROR, "### buffer is full, skip the data "
-			"(ret:%d, status=0x%02X, error=0x%02X, %d)  ###\n",
+		tcbd_debug(DEBUG_ERROR, "### buffer is full, skip the data "\
+			"(ret:%d, status=0x%02X, error=0x%02X, %d) ###\n",
 			ret, irq_status, irq_error,
-				(s32)tcpal_diff_time(irq_data->start_tick));
+			(s32)tcpal_diff_time(irq_data->start_tick));
 
 		tcbd_init_stream_data_config(device,
 			ENABLE_CMD_FIFO,
@@ -213,7 +213,7 @@ s32 tcpal_irq_register_handler(void *_device)
 #endif /*__CSPI_ONLY__*/
 
 	ret = request_irq(tcbd_irq_handler_data.tcbd_irq, tcpal_irq_handler,
-				IRQF_TRIGGER_FALLING | IRQF_DISABLED,
+			IRQF_TRIGGER_FALLING | IRQF_DISABLED,
 				"tdmb_irq", &tcbd_irq_handler_data);
 	tcbd_debug(DEBUG_INTRRUPT, "request_irq : %d\n", (int)ret);
 	return ret;

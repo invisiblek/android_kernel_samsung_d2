@@ -6,8 +6,10 @@
  * DEBUG_LIST.
  */
 
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/list.h>
+#include <linux/bug.h>
+#include <linux/kernel.h>
 
 /*
  * Insert a new entry between two known consecutive entries.
@@ -28,6 +30,14 @@ void __list_add(struct list_head *new,
 		"list_add corruption. prev->next should be "
 		"next (%p), but was %p. (prev=%p).\n",
 		next, prev->next, prev);
+#if 0
+	BUG_ON(((prev->next != next) || (next->prev != prev)) &&
+		PANIC_CORRUPTION);
+#endif
+	if ((prev->next != next) || (next->prev != prev))
+	{
+		panic("list corruption during add");
+	}
 	next->prev = new;
 	new->next = next;
 	new->prev = prev;
@@ -53,8 +63,13 @@ void __list_del_entry(struct list_head *entry)
 		"but was %p\n", entry, prev->next) ||
 	    WARN(next->prev != entry,
 		"list_del corruption. next->prev should be %p, "
-		"but was %p\n", entry, next->prev))
+		"but was %p\n", entry, next->prev)) {
+#if 0
+		BUG_ON(PANIC_CORRUPTION);
+		panic("list corruption during del");
+#endif
 		return;
+	}
 
 	__list_del(prev, next);
 }

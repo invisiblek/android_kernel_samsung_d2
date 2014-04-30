@@ -55,13 +55,36 @@ obj-$(CONFIG_SND_SOC_MSM8X60) += snd-soc-lpass-dma.o
 # for MSM 8960 sound card driver
 
 obj-$(CONFIG_SND_SOC_MSM_QDSP6_INTF) += qdsp6/
-
-snd-soc-qdsp6-objs := msm-dai-q6.o msm-pcm-q6.o msm-multi-ch-pcm-q6.o msm-lowlatency-pcm-q6.o msm-pcm-routing.o msm-dai-fe.o msm-compr-q6.o
+snd-soc-qdsp6-objs := msm-dai-q6.o msm-pcm-q6.o msm-multi-ch-pcm-q6.o msm-lowlatency-pcm-q6.o msm-pcm-loopback.o msm-pcm-routing.o msm-dai-fe.o msm-compr-q6.o msm-dai-stub.o
 obj-$(CONFIG_SND_SOC_MSM_QDSP6_HDMI_AUDIO) += msm-dai-q6-hdmi.o
 obj-$(CONFIG_SND_SOC_VOICE) += msm-pcm-voice.o msm-pcm-voip.o
-snd-soc-qdsp6-objs += msm-pcm-lpa.o msm-pcm-afe.o
+snd-soc-qdsp6-objs += msm-pcm-afe.o
 obj-$(CONFIG_SND_SOC_QDSP6) += snd-soc-qdsp6.o
 
+ifdef CONFIG_MACH_GOLDEN
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else ifdef CONFIG_MACH_LT02
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else ifdef CONFIG_MACH_MELIUS
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else ifdef CONFIG_MACH_SERRANO
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else ifdef CONFIG_MACH_M2
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else ifdef CONFIG_MACH_WILCOX_EUR_LTE
+snd-soc-qdsp6-objs += msm-pcm-lpa-89x0.o
+else
+snd-soc-qdsp6-objs += msm-pcm-lpa.o
+endif
+
+snd-soc-msm8960-objs := apq8064.o mpq8064.o apq8064-i2s.o
+ifdef CONFIG_WCD9306_CODEC
+snd-soc-msm8930-objs := msm8230.o
+CFLAGS_msm8230.o := -Wno-unused
+else
+snd-soc-msm8930-objs := msm8930.o
+endif
+obj-$(CONFIG_SND_SOC_MSM8930) += snd-soc-msm8930.o
 ifdef CONFIG_MACH_M2_ATT
 snd-soc-msm8960-objs := msm8960-d2.o
 else ifdef CONFIG_MACH_M2_SKT
@@ -94,8 +117,10 @@ else ifdef CONFIG_MACH_SUPERIORLTE_SKT
 snd-soc-msm8960-objs := msm8960-d2.o
 else ifdef CONFIG_MACH_JAGUAR
 snd-soc-msm8960-objs := msm8960-jaguar.o
+else ifdef CONFIG_SND_SOC_APQ8064
+snd-soc-msm8960-objs := apq8064.o
 else
-snd-soc-msm8960-objs := msm8960-jaguar.o
+snd-soc-msm8960-objs := msm8960.o
 endif
 
 obj-$(CONFIG_SND_SOC_MSM8960) += snd-soc-msm8960.o
@@ -106,3 +131,16 @@ obj-$(CONFIG_SND_SOC_MSM_HOSTLESS_PCM) += snd-soc-hostless-pcm.o
 
 snd-soc-msm8660-apq-objs := msm8660-apq-wm8903.o
 obj-$(CONFIG_SND_SOC_MSM8660_APQ) += snd-soc-msm8660-apq.o
+
+# for MDM 9615 sound card driver
+snd-soc-mdm9615-objs := mdm9615.o
+obj-$(CONFIG_SND_SOC_MDM9615) += snd-soc-mdm9615.o
+
+# for MSM 8974 sound card driver
+obj-$(CONFIG_SND_SOC_MSM_QDSP6V2_INTF) += qdsp6v2/
+snd-soc-msm8974-objs := msm8974.o
+obj-$(CONFIG_SND_SOC_MSM8974) += snd-soc-msm8974.o
+
+snd-soc-qdsp6v2-objs := msm-dai-fe.o msm-dai-stub.o
+obj-$(CONFIG_SND_SOC_QDSP6V2) += snd-soc-qdsp6v2.o
+

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -210,4 +210,3 @@ struct sn12m0pz_reg sn12m0pz_regs = {
 	.reg_pat = &iu060f_reg_pat[0],
 	.reg_pat_init = &iu060f_reg_pat_init[0],
 };
-

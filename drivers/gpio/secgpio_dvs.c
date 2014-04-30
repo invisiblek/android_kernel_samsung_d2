@@ -321,7 +321,7 @@ static int secgpio_dvs_probe(struct platform_device *pdev)
 	if (IS_ERR(secgpio_dotest)) {
 		ret = PTR_ERR(secgpio_dotest);
 		pr_err("Failed to create device(secgpio_check_all)");
-		goto fail1;
+		goto fail_out;
 	}
 	dev_set_drvdata(secgpio_dotest, gdvs);
 	gdvs_info = gdvs;
@@ -330,15 +330,9 @@ static int secgpio_dvs_probe(struct platform_device *pdev)
 			&secgpio_dvs_attr_group);
 	if (ret) {
 		pr_err("Failed to create sysfs group");
-		goto fail2;
+		goto fail_out;
 	}
 
-	return ret;
-
-fail2:
-	device_destroy(secgpio_dvs_class,0);
-fail1:
-	class_destroy(secgpio_dvs_class);
 fail_out:
 	if (ret)
 		pr_err(" (err = %d)!\n", ret);

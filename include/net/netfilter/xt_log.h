@@ -6,7 +6,7 @@ struct sbuff {
 };
 static struct sbuff emergency, *emergency_ptr = &emergency;
 
-static int sb_add(struct sbuff *m, const char *f, ...)
+static __printf(2, 3) int sb_add(struct sbuff *m, const char *f, ...)
 {
 	va_list args;
 	int len;
@@ -41,14 +41,13 @@ static struct sbuff *sb_open(void)
 
 static void sb_close(struct sbuff *m)
 {
-	void* ret;
 	m->buf[m->count] = 0;
 	printk("%s\n", m->buf);
 
 	if (likely(m != &emergency))
 		kfree(m);
 	else {
-		ret = xchg(&emergency_ptr, m);
+		emergency_ptr = m;
 		local_bh_enable();
 	}
 }

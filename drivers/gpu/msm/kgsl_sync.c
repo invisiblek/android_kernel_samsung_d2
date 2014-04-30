@@ -73,7 +73,6 @@ static int kgsl_sync_pt_compare(struct sync_pt *a, struct sync_pt *b)
 struct kgsl_fence_event_priv {
 	struct kgsl_context *context;
 	unsigned int timestamp;
-	struct sync_timeline *timeline;
 };
 
 /**
@@ -87,15 +86,14 @@ struct kgsl_fence_event_priv {
  */
 
 static inline void kgsl_fence_event_cb(struct kgsl_device *device,
-	void *priv, u32 timestamp)
+	void *priv, u32 context_id, u32 timestamp, u32 type)
 {
 	struct kgsl_fence_event_priv *ev = priv;
-	if (ev != NULL) {
-		kgsl_sync_timeline_signal(ev->timeline, ev->timestamp);
-		kfree(ev);
-	} else {
-		KGSL_DRV_WARN(device, "kgsl_sync_timeline_signal Failed ..!!\n");
-	}
+
+	/* Signal event time timeline for every event type */
+	kgsl_sync_timeline_signal(ev->context->timeline, ev->timestamp);
+	kgsl_context_put(ev->context);
+	kfree(ev);
 }
 
 /**
@@ -125,24 +123,26 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 	if (len != sizeof(priv))
 		return -EINVAL;
 
-	context = kgsl_find_context(owner, context_id);
-	if (context == NULL)
-		return -EINVAL;
-
 	event = kzalloc(sizeof(*event), GFP_KERNEL);
 	if (event == NULL)
 		return -ENOMEM;
+
+	context = kgsl_context_get_owner(owner, context_id);
+
+	if (context == NULL) {
+		kfree(event);
+		return -EINVAL;
+	}
+
 	event->context = context;
-	
 	event->timestamp = timestamp;
+
 	pt = kgsl_sync_pt_create(context->timeline, timestamp);
 	if (pt == NULL) {
 		KGSL_DRV_ERR(device, "kgsl_sync_pt_create failed\n");
 		ret = -ENOMEM;
 		goto fail_pt;
 	}
-
-	event->timeline = context->timeline;
 
 	fence = sync_fence_create("kgsl-fence", pt);
 	if (fence == NULL) {
@@ -166,7 +166,11 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		goto fail_copy_fd;
 	}
 
-	ret = kgsl_add_event(device, timestamp,
+	/*
+	 * Hold the context ref-count for the event - it will get released in
+	 * the callback
+	 */
+	ret = kgsl_add_event(device, context_id, timestamp,
 			kgsl_fence_event_cb, event, owner);
 	if (ret)
 		goto fail_event;
@@ -182,6 +186,7 @@ fail_fd:
 	sync_fence_put(fence);
 fail_fence:
 fail_pt:
+	kgsl_context_put(context);
 	kfree(event);
 	return ret;
 }
@@ -189,7 +194,16 @@ fail_pt:
 static unsigned int kgsl_sync_get_timestamp(
 	struct kgsl_sync_timeline *ktimeline, enum kgsl_timestamp_type type)
 {
-	return  ktimeline->device->ftbl->readtimestamp(ktimeline->device, type);
+	unsigned int ret = 0;
+
+	struct kgsl_context *context = kgsl_context_get(ktimeline->device,
+			ktimeline->context_id);
+
+	if (context)
+		ret = kgsl_readtimestamp(ktimeline->device, context, type);
+
+	kgsl_context_put(context);
+	return ret;
 }
 
 static void kgsl_sync_timeline_value_str(struct sync_timeline *sync_timeline,

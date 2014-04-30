@@ -73,7 +73,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <asm/uaccess.h>
-#include <asm/system.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/jiffies.h>
@@ -304,9 +303,11 @@ static struct sk_buff *igmpv3_newpack(struct net_device *dev, int size)
 	struct igmpv3_report *pig;
 	struct net *net = dev_net(dev);
 	struct flowi4 fl4;
+	int hlen = LL_RESERVED_SPACE(dev);
+	int tlen = dev->needed_tailroom;
 
 	while (1) {
-		skb = alloc_skb(size + LL_ALLOCATED_SPACE(dev),
+		skb = alloc_skb(size + hlen + tlen,
 				GFP_ATOMIC | __GFP_NOWARN);
 		if (skb)
 			break;
@@ -327,7 +328,7 @@ static struct sk_buff *igmpv3_newpack(struct net_device *dev, int size)
 	skb_dst_set(skb, &rt->dst);
 	skb->dev = dev;
 
-	skb_reserve(skb, LL_RESERVED_SPACE(dev));
+	skb_reserve(skb, hlen);
 
 	skb_reset_network_header(skb);
 	pip = ip_hdr(skb);
@@ -647,6 +648,7 @@ static int igmp_send_report(struct in_device *in_dev, struct ip_mc_list *pmc,
 	__be32	group = pmc ? pmc->multiaddr : 0;
 	struct flowi4 fl4;
 	__be32	dst;
+	int hlen, tlen;
 
 	if (type == IGMPV3_HOST_MEMBERSHIP_REPORT)
 		return igmpv3_send_report(in_dev, pmc);
@@ -661,7 +663,9 @@ static int igmp_send_report(struct in_device *in_dev, struct ip_mc_list *pmc,
 	if (IS_ERR(rt))
 		return -1;
 
-	skb = alloc_skb(IGMP_SIZE+LL_ALLOCATED_SPACE(dev), GFP_ATOMIC);
+	hlen = LL_RESERVED_SPACE(dev);
+	tlen = dev->needed_tailroom;
+	skb = alloc_skb(IGMP_SIZE + hlen + tlen, GFP_ATOMIC);
 	if (skb == NULL) {
 		ip_rt_put(rt);
 		return -1;
@@ -669,7 +673,7 @@ static int igmp_send_report(struct in_device *in_dev, struct ip_mc_list *pmc,
 
 	skb_dst_set(skb, &rt->dst);
 
-	skb_reserve(skb, LL_RESERVED_SPACE(dev));
+	skb_reserve(skb, hlen);
 
 	skb_reset_network_header(skb);
 	iph = ip_hdr(skb);
@@ -1011,7 +1015,7 @@ static void ip_mc_filter_add(struct in_device *in_dev, __be32 addr)
 
 	/* Checking for IFF_MULTICAST here is WRONG-WRONG-WRONG.
 	   We will get multicast token leakage, when IFF_MULTICAST
-	   is changed. This check should be done in dev->set_multicast_list
+	   is changed. This check should be done in ndo_set_rx_mode
 	   routine. Something sort of:
 	   if (dev->mc_list && dev->flags&IFF_MULTICAST) { do it; }
 	   --ANK
@@ -1214,11 +1218,23 @@ void ip_mc_inc_group(struct in_device *in_dev, __be32 addr)
 {
 	struct ip_mc_list *im;
 
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+	struct net_device *dev = in_dev->dev;
+	char buf[MAX_ADDR_LEN];
+
+	arp_mc_map(addr, buf, dev, 0);
+	printk("CONV_WIFI - %s: [%s] addr[%x]\n"
+			,__func__, dev->name, addr);
+#endif
+
 	ASSERT_RTNL();
 
 	for_each_pmc_rtnl(in_dev, im) {
 		if (im->multiaddr == addr) {
 			im->users++;
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+			printk("CONV_WIFI - %s: [%s] Users count increase. im->users[%d]\n",__func__, dev->name, im->users);
+#endif
 			ip_mc_add_src(in_dev, &addr, MCAST_EXCLUDE, 0, NULL, 0);
 			goto out;
 		}
@@ -1229,6 +1245,9 @@ void ip_mc_inc_group(struct in_device *in_dev, __be32 addr)
 		goto out;
 
 	im->users = 1;
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+	printk("CONV_WIFI - %s: [%s] Users count initilize. im->users[%d]\n",__func__, dev->name, im->users);
+#endif
 	im->interface = in_dev;
 	in_dev_hold(in_dev);
 	im->multiaddr = addr;
@@ -1295,6 +1314,22 @@ void ip_mc_dec_group(struct in_device *in_dev, __be32 addr)
 	struct ip_mc_list *i;
 	struct ip_mc_list __rcu **ip;
 
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+	struct net_device *dev = NULL;
+	if (in_dev)
+		dev= in_dev->dev;
+
+	if (dev) {
+		char buf[MAX_ADDR_LEN];
+		arp_mc_map(addr, buf, dev, 0);
+		printk("CONV_WIFI - %s: [%s] addr[%x]\n"
+				,__func__, dev->name, addr);
+	} else {
+		printk("CONV_WIFI - %s: [-] addr[%x] \n"
+				,__func__, addr)
+	}
+#endif
+
 	ASSERT_RTNL();
 
 	for (ip = &in_dev->mc_list;
@@ -1304,6 +1339,12 @@ void ip_mc_dec_group(struct in_device *in_dev, __be32 addr)
 			if (--i->users == 0) {
 				*ip = i->next_rcu;
 				in_dev->mc_count--;
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+				if (dev)
+					printk("CONV_WIFI - %s: [%s] Users count is zero. i->users[%d]\n",__func__, dev->name, i->users);
+				else
+					printk("CONV_WIFI - %s: [-] Users count is zero. i->users[%d]\n",__func__, i->users);
+#endif
 				igmp_group_dropped(i);
 				ip_mc_clear_src(i);
 
@@ -1313,6 +1354,12 @@ void ip_mc_dec_group(struct in_device *in_dev, __be32 addr)
 				ip_ma_put(i);
 				return;
 			}
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+			if (dev)
+				printk("CONV_WIFI - %s: [%s] Users count decrease. i->users[%d]\n",__func__, dev->name, i->users);
+			else
+				printk("CONV_WIFI - %s: [-] Users count decrease. i->users[%d]\n",__func__,  i->users);
+#endif
 			break;
 		}
 	}
@@ -1576,7 +1623,7 @@ out_unlock:
  * Add multicast single-source filter to the interface list
  */
 static int ip_mc_add1_src(struct ip_mc_list *pmc, int sfmode,
-	__be32 *psfsrc, int delta)
+	__be32 *psfsrc)
 {
 	struct ip_sf_list *psf, *psf_prev;
 
@@ -1711,14 +1758,15 @@ static int ip_mc_add_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 		pmc->sfcount[sfmode]++;
 	err = 0;
 	for (i=0; i<sfcount; i++) {
-		err = ip_mc_add1_src(pmc, sfmode, &psfsrc[i], delta);
+		err = ip_mc_add1_src(pmc, sfmode, &psfsrc[i]);
 		if (err)
 			break;
 	}
 	if (err) {
 		int j;
 
-		pmc->sfcount[sfmode]--;
+		if (!delta)
+			pmc->sfcount[sfmode]--;
 		for (j=0; j<i; j++)
 			(void) ip_mc_del1_src(pmc, sfmode, &psfsrc[j]);
 	} else if (isexclude != (pmc->sfcount[MCAST_EXCLUDE] != 0)) {
@@ -1796,6 +1844,15 @@ int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
 		goto done;
 	}
 
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+	if (in_dev) {
+		struct net_device *dev = in_dev->dev;
+		printk("CONV_WIFI - %s: [%s] Igmp join\n",__func__, dev->name);
+	} else {
+		printk("CONV_WIFI - %s: [-] Igmp join\n",__func__);
+	}
+#endif
+
 	err = -EADDRINUSE;
 	ifindex = imr->imr_ifindex;
 	for_each_pmc_rtnl(inet, i) {
@@ -1837,7 +1894,7 @@ static int ip_mc_leave_src(struct sock *sk, struct ip_mc_socklist *iml,
 	}
 	err = ip_mc_del_src(in_dev, &iml->multi.imr_multiaddr.s_addr,
 			iml->sfmode, psf->sl_count, psf->sl_addr, 0);
-	rcu_assign_pointer(iml->sflist, NULL);
+	RCU_INIT_POINTER(iml->sflist, NULL);
 	/* decrease mem now to avoid the memleak warning */
 	atomic_sub(IP_SFLSIZE(psf->sl_max), &sk->sk_omem_alloc);
 	kfree_rcu(psf, rcu);
@@ -1862,6 +1919,14 @@ int ip_mc_leave_group(struct sock *sk, struct ip_mreqn *imr)
 	rtnl_lock();
 	in_dev = ip_mc_find_dev(net, imr);
 	ifindex = imr->imr_ifindex;
+#ifdef CONFIG_WIFI_MULTICAST_LOG
+	if (in_dev) {
+		struct net_device *dev = in_dev->dev;
+		printk("CONV_WIFI - %s: [%s] Igmp leave\n",__func__, dev->name);
+	} else {
+		printk("CONV_WIFI - %s: [-] Igmp leave\n",__func__);
+	}
+#endif
 	for (imlp = &inet->mc_list;
 	     (iml = rtnl_dereference(*imlp)) != NULL;
 	     imlp = &iml->next_rcu) {

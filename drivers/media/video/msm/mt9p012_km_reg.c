@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -371,5 +371,3 @@ struct mt9p012_km_reg mt9p012_km_regs = {
 	.rftbl = &mt9p012_km_rolloff_tbl[0],
 	.rftbl_size = ARRAY_SIZE(mt9p012_km_rolloff_tbl)
 };
-
-

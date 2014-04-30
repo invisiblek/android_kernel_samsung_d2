@@ -74,7 +74,7 @@ struct rlimit64 {
  * Secure Storage wants 64MB of mlocked memory, to make sure
  * the authentication of an application using Secure Storage.
  */
-#define MLOCK_LIMIT ((PAGE_SIZE > 64*1024*1024) ? PAGE_SIZE : 64*1024*1024)
+#define MLOCK_LIMIT	((PAGE_SIZE > 64*1024*1024) ? PAGE_SIZE : 64*1024*1024)
 
 /*
  * Due to binary compatibility, the actual resource numbers

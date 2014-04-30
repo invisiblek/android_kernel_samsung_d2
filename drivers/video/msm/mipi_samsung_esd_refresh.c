@@ -21,11 +21,15 @@
  */
 
 #include "mipi_samsung_esd_refresh.h"
+#include <linux/gpio.h>
+#include <mach/msm8930-gpio.h>
 
 static struct mipi_controls mipi_control;
 static struct esd_data_t *esd_enable;
 static irqreturn_t sec_esd_irq_handler(int irq, void *handle);
-
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+extern unsigned int system_rev;
+#endif
 #ifdef READ_REGISTER_ESD
 static struct completion esd_completion;
 #endif
@@ -61,35 +65,39 @@ static void lcd_esd_seq(struct esd_data_t *p_esd_data)
 
 	struct msm_fb_data_type *mfd;
 	struct msm_fb_panel_data *pdata;
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+	int retry;
+#endif
+
 	mfd = platform_get_drvdata(mipi_control.mipi_dev);
 	if (mfd->panel_power_on) {
 #ifndef ESD_DEBUG
 		/* threaded irq can sleep */
 		wake_lock_timeout(&p_esd_data->det_wake_lock, WAKE_LOCK_TIME);
 #endif
+		pr_info("lcd_esd_seq + \n");
 		p_esd_data->refresh_ongoing = true;
 		set_esd_refresh(true);
 		p_esd_data->esd_ignore = true;
 
-		mfd->fbi->fbops->fb_blank(FB_BLANK_VSYNC_SUSPEND, mfd->fbi);
-
-		pr_info("Mipi ESD Turn off comple..........\n");
-		msleep(100);
-		mfd->fbi->fbops->fb_blank(FB_BLANK_UNBLANK, mfd->fbi);
-		mfd->fbi->fbops->fb_pan_display(&mfd->fbi->var, mfd->fbi);
-
-		pr_info("Mipi ESD Turn On complete...........\n");
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+		for(retry=0; retry<10; retry++)
+		{
+			esd_recovery();
+			msleep(500);
+			if(!gpio_get_value(GPIO_LCD_ESD_DET))
+				break;
+			else
+				printk(KERN_ERR "ESD Retry!!!! (cnt=%d)\n",retry+1);
+		}
+#endif
 
 		p_esd_data->refresh_ongoing = false;
 		set_esd_refresh(false);
 		p_esd_data->esd_processed_count++;
-
+		pr_info("lcd_esd_seq - \n");
 		/* Restore brightness */
 		pdata = mipi_control.mipi_dev->dev.platform_data;
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT) || \
-	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
-		reset_gamma_level();
-#endif
 		pdata->set_backlight(mfd);
 
 	} else {
@@ -105,6 +113,10 @@ static void lcd_esd_seq(struct esd_data_t *p_esd_data)
 
 static void sec_esd_work_func(struct work_struct *work)
 {
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+#define LCD_ESD_GPIO_CHECK_DELAY 300
+	int gpio_value = 0;
+#endif
 	struct esd_data_t *p_esd_data =
 		container_of(work, struct esd_data_t, det_work);
 	p_esd_data->esd_count++;
@@ -116,7 +128,29 @@ static void sec_esd_work_func(struct work_struct *work)
 			__func__, p_esd_data->esd_count,
 			p_esd_data->esd_processed_count);
 	else {
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+		gpio_value = gpio_get_value(GPIO_LCD_ESD_DET);
+		pr_info("%s : GPIO_LCD_ESD_DET :%d\n",__func__, gpio_value);
+		msleep(LCD_ESD_GPIO_CHECK_DELAY);
+		gpio_value = gpio_get_value(GPIO_LCD_ESD_DET);
+		pr_info("%s : GPIO_LCD_ESD_DET :%d After Delay %d ms \n",__func__, gpio_value,LCD_ESD_GPIO_CHECK_DELAY);
+#if defined(CONFIG_MACH_MELIUS_SPR)
+			if(system_rev >= 3) {
+#elif defined(CONFIG_MACH_MELIUS_USC)
+			if(system_rev >= 2) {
+#else
+			if(system_rev >= 11) {
+#endif
+				if(gpio_value)
+					lcd_esd_seq(p_esd_data);
+			}
+			else {
+				if(!gpio_value)
+					lcd_esd_seq(p_esd_data);
+			}
+#else
 		lcd_esd_seq(p_esd_data);
+#endif
 	}
 	p_esd_data->esd_irq_enable = true;
 	return;
@@ -163,11 +197,11 @@ static irqreturn_t sec_esd_irq_handler(int irq, void *handle)
 		ESD Already executing*/
 		return IRQ_HANDLED;
 	}
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT)
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
 	/* ESD occurred during Wakeup/Suspend, So ignore */
 	if (mfd->resume_state)
 		return IRQ_HANDLED;
-#endif
+#endif	
 	p_esd_data->esd_irq_enable = false;
 	schedule_work(&p_esd_data->det_work);
 
@@ -215,9 +249,13 @@ void set_esd_enable(void)
 		pr_err("ESD Driver data is NULL!!\n");
 		return;
 	}
-
+#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_HD_PT_PANEL)
+	schedule_delayed_work(&esd_enable->esd_enable_delay,\
+	msecs_to_jiffies(100));
+#else
 	schedule_delayed_work(&esd_enable->esd_enable_delay,\
 	msecs_to_jiffies(500));
+#endif
 }
 void set_esd_disable(void)
 {
@@ -278,17 +316,29 @@ static int __devinit mipi_esd_refresh_probe(struct platform_device *pdev)
 	register_early_suspend(&mipi_control.early_suspend);
 #endif
 
-#if defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_INFINITE)
-	if (system_rev > 0x01)
-		irq_type = IRQF_TRIGGER_FALLING;
-	else     {
-		/* Gogh 0.1rev  has ESD protection chip irq
-			trigger is low.....HIGH...low */
+#if defined(CONFIG_MACH_MELIUS_EUR_OPEN) || defined(CONFIG_MACH_MELIUS_EUR_LTE)\
+	|| defined(CONFIG_MACH_MELIUS_SKT) || defined(CONFIG_MACH_MELIUS_KTT)\
+	|| defined(CONFIG_MACH_MELIUS_LGT) || defined(CONFIG_MACH_MELIUS_CHN_CTC)\
+	|| defined(CONFIG_MACH_MELIUS_SPR) || defined(CONFIG_MACH_MELIUS_USC) \
+	|| defined(CONFIG_MACH_MELIUS_MTR) || defined(CONFIG_MACH_MELIUS_ATT)
+
+#if defined(CONFIG_MACH_MELIUS_SPR)
+	if(system_rev >= 3) {		
+#elif defined(CONFIG_MACH_MELIUS_USC)
+	if(system_rev >= 2) {
+#else
+	if(system_rev >= 11) {	
+#endif
+		/* ESD irq through VGH, irq trigger is LOW....HIGH....LOW */
 		irq_type = IRQF_TRIGGER_RISING;
+	} else {
+		/* ESD irq through VGH, irq trigger is HIGH....low....HIGH */
+		irq_type = IRQF_TRIGGER_FALLING;
 	}
 #else
 	/* ESD irq through VGH, irq trigger is HIGH....low....HIGH */
 	irq_type = IRQF_TRIGGER_FALLING;
+
 #endif
 
 
@@ -337,25 +387,9 @@ static int __devinit mipi_esd_refresh_probe(struct platform_device *pdev)
 		pr_err("%s : Failed to request_irq.:ret=%d", __func__, ret);
 		goto err_request_detect_irq;
 	}
-#if defined(CONFIG_SAMSUNG_CMC624)
-	if (samsung_has_cmc624()) {
-		ret = request_threaded_irq(pdata->esd_gpio_cmc_irq, NULL,
-			sec_esd_irq_handler,
-			IRQF_TRIGGER_RISING |
-			IRQF_ONESHOT, "esd_detect2", p_esd_data);
-		if (ret) {
-			pr_err("%s:Fail to request_irq.:ret=%d", __func__, ret);
-			goto err_request_detect_irq2;
-		}
-	}
-#endif
+
 	set_esd_disable();
 	return 0;
-
-#if defined(CONFIG_SAMSUNG_CMC624)
-err_request_detect_irq2:
-	free_irq(pdata->esd_gpio_irq, p_esd_data);
-#endif
 
 err_request_detect_irq:
 	wake_lock_destroy(&p_esd_data->det_wake_lock);
@@ -372,10 +406,6 @@ static int sec_esd_remove(struct platform_device *pdev)
 	struct esd_data_t *p_esd_data = dev_get_drvdata(&pdev->dev);
 	free_irq(p_esd_data->pdata->esd_gpio_irq, p_esd_data);
 	disable_irq_wake(p_esd_data->pdata->esd_gpio_irq);
-#if defined(CONFIG_SAMSUNG_CMC624)
-	free_irq(p_esd_data->pdata->esd_gpio_cmc_irq, p_esd_data);
-	disable_irq_wake(p_esd_data->pdata->esd_gpio_cmc_irq);
-#endif
 	wake_lock_destroy(&p_esd_data->det_wake_lock);
 	kfree(p_esd_data);
 	return 0;

@@ -24,6 +24,8 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/cryptouser.h>
+#include <net/netlink.h>
 
 #include "internal.h"
 
@@ -41,22 +43,22 @@ static int blkcipher_walk_first(struct blkcipher_desc *desc,
 
 static inline void blkcipher_map_src(struct blkcipher_walk *walk)
 {
-	walk->src.virt.addr = scatterwalk_map(&walk->in, 0);
+	walk->src.virt.addr = scatterwalk_map(&walk->in);
 }
 
 static inline void blkcipher_map_dst(struct blkcipher_walk *walk)
 {
-	walk->dst.virt.addr = scatterwalk_map(&walk->out, 1);
+	walk->dst.virt.addr = scatterwalk_map(&walk->out);
 }
 
 static inline void blkcipher_unmap_src(struct blkcipher_walk *walk)
 {
-	scatterwalk_unmap(walk->src.virt.addr, 0);
+	scatterwalk_unmap(walk->src.virt.addr);
 }
 
 static inline void blkcipher_unmap_dst(struct blkcipher_walk *walk)
 {
-	scatterwalk_unmap(walk->dst.virt.addr, 1);
+	scatterwalk_unmap(walk->dst.virt.addr);
 }
 
 /* Get a spot of the specified length that does not straddle a page.
@@ -105,6 +107,11 @@ int blkcipher_walk_done(struct blkcipher_desc *desc,
 {
 	struct crypto_blkcipher *tfm = desc->tfm;
 	unsigned int nbytes = 0;
+
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return (-EACCES);
+#endif
 
 	if (likely(err >= 0)) {
 		unsigned int n = walk->nbytes - err;
@@ -324,6 +331,11 @@ static int blkcipher_walk_first(struct blkcipher_desc *desc,
 	struct crypto_blkcipher *tfm = desc->tfm;
 	unsigned int alignmask = crypto_blkcipher_alignmask(tfm);
 
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return (-EACCES);
+#endif
+
 	if (WARN_ON_ONCE(in_irq()))
 		return -EDEADLK;
 
@@ -410,6 +422,10 @@ static int async_encrypt(struct ablkcipher_request *req)
 		.flags = req->base.flags,
 	};
 
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return (-EACCES);
+#endif
 
 	return alg->encrypt(&desc, req->dst, req->src, req->nbytes);
 }
@@ -423,6 +439,11 @@ static int async_decrypt(struct ablkcipher_request *req)
 		.info = req->info,
 		.flags = req->base.flags,
 	};
+
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return (-EACCES);
+#endif
 
 	return alg->decrypt(&desc, req->dst, req->src, req->nbytes);
 }
@@ -492,6 +513,35 @@ static int crypto_init_blkcipher_ops(struct crypto_tfm *tfm, u32 type, u32 mask)
 		return crypto_init_blkcipher_ops_async(tfm);
 }
 
+#ifdef CONFIG_NET
+static int crypto_blkcipher_report(struct sk_buff *skb, struct crypto_alg *alg)
+{
+	struct crypto_report_blkcipher rblkcipher;
+
+	snprintf(rblkcipher.type, CRYPTO_MAX_ALG_NAME, "%s", "blkcipher");
+	snprintf(rblkcipher.geniv, CRYPTO_MAX_ALG_NAME, "%s",
+		 alg->cra_blkcipher.geniv ?: "<default>");
+
+	rblkcipher.blocksize = alg->cra_blocksize;
+	rblkcipher.min_keysize = alg->cra_blkcipher.min_keysize;
+	rblkcipher.max_keysize = alg->cra_blkcipher.max_keysize;
+	rblkcipher.ivsize = alg->cra_blkcipher.ivsize;
+
+	NLA_PUT(skb, CRYPTOCFGA_REPORT_BLKCIPHER,
+		sizeof(struct crypto_report_blkcipher), &rblkcipher);
+
+	return 0;
+
+nla_put_failure:
+	return -EMSGSIZE;
+}
+#else
+static int crypto_blkcipher_report(struct sk_buff *skb, struct crypto_alg *alg)
+{
+	return -ENOSYS;
+}
+#endif
+
 static void crypto_blkcipher_show(struct seq_file *m, struct crypto_alg *alg)
 	__attribute__ ((unused));
 static void crypto_blkcipher_show(struct seq_file *m, struct crypto_alg *alg)
@@ -511,6 +561,7 @@ const struct crypto_type crypto_blkcipher_type = {
 #ifdef CONFIG_PROC_FS
 	.show = crypto_blkcipher_show,
 #endif
+	.report = crypto_blkcipher_report,
 };
 EXPORT_SYMBOL_GPL(crypto_blkcipher_type);
 
@@ -554,6 +605,11 @@ struct crypto_instance *skcipher_geniv_alloc(struct crypto_template *tmpl,
 	struct crypto_instance *inst;
 	struct crypto_alg *alg;
 	int err;
+
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return ERR_PTR(-EACCES);
+#endif
 
 	algt = crypto_get_attr_type(tb);
 	err = PTR_ERR(algt);
@@ -678,6 +734,11 @@ int skcipher_geniv_init(struct crypto_tfm *tfm)
 {
 	struct crypto_instance *inst = (void *)tfm->__crt_alg;
 	struct crypto_ablkcipher *cipher;
+
+#ifdef CONFIG_CRYPTO_FIPS
+    if (unlikely(in_fips_err())) 
+        return (-EACCES);
+#endif
 
 	cipher = crypto_spawn_skcipher(crypto_instance_ctx(inst));
 	if (IS_ERR(cipher))

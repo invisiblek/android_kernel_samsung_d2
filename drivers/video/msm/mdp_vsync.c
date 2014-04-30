@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, 2012 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2009, 2012-2013 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -224,7 +224,11 @@ static void mdp_set_sync_cfg_0(struct msm_fb_data_type *mfd, int vsync_cnt)
 {
 	unsigned long cfg;
 
-	cfg = mfd->total_lcd_lines - 1;
+	if (mfd->panel_info.lcd.total_lines)
+		cfg = mfd->panel_info.lcd.total_lines;
+	else
+		cfg = mfd->total_lcd_lines - 1;
+
 	cfg <<= MDP_SYNCFG_HGT_LOC;
 	if (mfd->panel_info.lcd.hw_vsync_mode)
 		cfg |= MDP_SYNCFG_VSYNC_EXT_EN;
@@ -238,7 +242,11 @@ static void mdp_set_sync_cfg_1(struct msm_fb_data_type *mfd, int vsync_cnt)
 {
 	unsigned long cfg;
 
-	cfg = mfd->total_lcd_lines - 1;
+	if (mfd->panel_info.lcd.total_lines)
+		cfg = mfd->panel_info.lcd.total_lines;
+	else
+		cfg = mfd->total_lcd_lines - 1;
+
 	cfg <<= MDP_SYNCFG_HGT_LOC;
 	if (mfd->panel_info.lcd.hw_vsync_mode)
 		cfg |= MDP_SYNCFG_VSYNC_EXT_EN;
@@ -284,7 +292,7 @@ void mdp_vsync_cfg_regs(struct msm_fb_data_type *mfd,
 	 * external vsync source pulse width and
 	 * polarity flip
 	 */
-	MDP_OUTP(MDP_BASE + MDP_PRIM_VSYNC_OUT_CTRL, BIT(0)|BIT(30));
+	MDP_OUTP(MDP_BASE + MDP_PRIM_VSYNC_OUT_CTRL, BIT(0));
 #ifdef CONFIG_FB_MSM_MDP40
 	if (mdp_hw_revision < MDP4_REVISION_V2_1) {
 		MDP_OUTP(MDP_BASE +	MDP_SEC_VSYNC_OUT_CTRL, BIT(0));

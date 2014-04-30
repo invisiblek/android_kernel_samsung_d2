@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -91,6 +91,12 @@ enum vpe_state {
 	VPE_STATE_ACTIVE,
 };
 
+struct dis_offset_type {
+	int32_t dis_offset_x;
+	int32_t dis_offset_y;
+	uint32_t frame_id;
+};
+
 struct vpe_ctrl_type {
 	spinlock_t        lock;
 	uint32_t          irq_status;
@@ -99,9 +105,14 @@ struct vpe_ctrl_type {
 	void              *extdata;
 	uint32_t          extlen;
 	struct msm_vpe_callback *resp;
+	uint32_t          in_h_w;
 	uint32_t          out_h;  /* this is BEFORE rotation. */
 	uint32_t          out_w;  /* this is BEFORE rotation. */
+	uint32_t          dis_en;
 	struct timespec   ts;
+	struct dis_offset_type   dis_offset;
+	uint32_t          pcbcr_before_dis;
+	uint32_t          pcbcr_dis_offset;
 	int               output_type;
 	int               frame_pack;
 	uint8_t           pad_2k_bool;
@@ -138,7 +149,7 @@ struct vpe_src_xy_packed {
 
 struct vpe_input_plane_update_type {
 	struct vpe_src_size_packed             src_roi_size;
-	/* crop updates this set. */
+	/* DIS updates this set. */
 	struct vpe_src_xy_packed               src_roi_offset;
 	/* input address*/
 	uint8_t                         *src_p0_addr;
@@ -179,4 +190,3 @@ struct phase_val_t {
 
 
 #endif /*_MSM_VPE_H_*/
-

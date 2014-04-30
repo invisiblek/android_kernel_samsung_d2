@@ -17,9 +17,9 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <mach/proc_comm.h>
 
 #include "smd_private.h"
-#include "proc_comm.h"
 
 #define DEBUG
 /* #undef DEBUG */
@@ -104,6 +104,8 @@ static ssize_t reset_modem_write(struct file *fp, const char __user *buf,
 		       __func__);
 		r = 0;
 		msm_proc_comm_reset_modem_now();
+		if (r < 0)
+			return r;
 	} else if (!strncmp(cmd, "reset chip now", 14)) {
 		uint param1 = 0x0;
 		uint param2 = 0x0;

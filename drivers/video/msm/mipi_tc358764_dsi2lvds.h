@@ -13,15 +13,22 @@
 
 #ifndef MIPI_TC358764_DSI2LVDS_H
 #define MIPI_TC358764_DSI2LVDS_H
-#if !defined (CONFIG_MACH_ESPRESSO10_SPR)  && !defined (CONFIG_MACH_ESPRESSO10_VZW) && !defined (CONFIG_MACH_ESPRESSO_VZW)
-#define PWM_LEVEL 255
-#endif
+
+enum {
+	MIPI_RESUME_STATE,
+	MIPI_SUSPEND_STATE,
+};
+
 struct dsi2lvds_panel_data {
 	const char panel_name[30];
 };
 struct dsi2lvds_driver_data {
 	struct dsi2lvds_panel_data *dpd;
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+	struct early_suspend early_suspend;
+#endif
 };
+extern int poweroff_charging;
 
 int mipi_tc358764_dsi2lvds_register(struct msm_panel_info *pinfo,
 	u32 channel_id, u32 panel_id, struct dsi2lvds_panel_data *dpd);

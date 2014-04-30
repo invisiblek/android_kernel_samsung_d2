@@ -76,7 +76,6 @@ static int writeback_probe(struct platform_device *pdev)
 	platform_set_drvdata(mdp_dev, mfd);
 
 	mfd->writeback_sdev.name = "wfd";
-
 	rc = switch_dev_register(&mfd->writeback_sdev);
 	if (rc) {
 		pr_err("Failed to setup switch dev for writeback panel");

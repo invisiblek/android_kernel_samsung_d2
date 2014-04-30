@@ -1,4 +1,4 @@
-/*
+ /*
  * drivers/usb/gadget/f_mtp_samsung.c
  *
  * Function Driver for USB MTP,
@@ -97,7 +97,7 @@
 #define MTPG_INTR_BUFFER_SIZE	28
 
 /* number of rx and tx requests to allocate */
-#define MTPG_RX_REQ_MAX				4
+#define MTPG_RX_REQ_MAX			4
 #define MTPG_MTPG_TX_REQ_MAX		4
 #define MTPG_INTR_REQ_MAX	5
 
@@ -717,12 +717,7 @@ static ssize_t mtpg_write(struct file *fp, const char __user *buf,
 					 __func__, __LINE__, r);
 	return r;
 }
-/*
-static void interrupt_complete(struct usb_ep *ep, struct usb_request *req)
-{
-	printk(KERN_DEBUG "Finished Writing Interrupt Data\n");
-}
-*/
+
 static ssize_t interrupt_write(struct file *fd,
 			const char __user *buf, size_t count)
 {
@@ -769,7 +764,6 @@ static void read_send_work(struct work_struct *work)
 {
 	struct mtpg_dev	*dev = container_of(work, struct mtpg_dev,
 							read_send_work);
-	//struct usb_composite_dev *cdev = dev->cdev;
 	struct usb_request *req = 0;
 	struct usb_container_header *hdr;
 	struct file *file;
@@ -1324,13 +1318,17 @@ static int mtpg_function_set_alt(struct usb_function *f,
 	if (dev->int_in->driver_data)
 		usb_ep_disable(dev->int_in);
 
-	ret = usb_ep_enable(dev->int_in,
-			ep_choose(cdev->gadget, &int_hs_notify_desc,
-						&int_fs_notify_desc));
+	ret = config_ep_by_speed(cdev->gadget, f, dev->int_in);
 	if (ret) {
-		usb_ep_disable(dev->int_in);
-		dev->int_in->driver_data = NULL;
-		printk(KERN_ERR "[%s]Error in enabling INT EP\n", __func__);
+		dev->int_in->desc = NULL;
+		ERROR(cdev, "config_ep_by_speed failes for ep %s, result %d\n",
+			dev->int_in->name, ret);
+		return ret;
+	}
+	ret = usb_ep_enable(dev->int_in);
+	if (ret) {
+		ERROR(cdev, "failed to enable ep %s, result %d\n",
+			dev->int_in->name, ret);
 		return ret;
 	}
 	dev->int_in->driver_data = dev;
@@ -1338,29 +1336,35 @@ static int mtpg_function_set_alt(struct usb_function *f,
 	if (dev->bulk_in->driver_data)
 		usb_ep_disable(dev->bulk_in);
 
-	ret = usb_ep_enable(dev->bulk_in,
-			ep_choose(cdev->gadget, &hs_mtpg_in_desc,
-						&fs_mtpg_in_desc));
+	ret = config_ep_by_speed(cdev->gadget, f, dev->bulk_in);
 	if (ret) {
-		usb_ep_disable(dev->bulk_in);
-		dev->bulk_in->driver_data = NULL;
-		 printk(KERN_ERR "[%s] Enable Bulk-IN EP error%d\n",
-							__func__, __LINE__);
-		 return ret;
+		dev->bulk_in->desc = NULL;
+		ERROR(cdev, "config_ep_by_speed failes for ep %s, result %d\n",
+			dev->bulk_in->name, ret);
+		return ret;
+	}
+	ret = usb_ep_enable(dev->bulk_in);
+	if (ret) {
+		ERROR(cdev, "failed to enable ep %s, result %d\n",
+			dev->bulk_in->name, ret);
+		return ret;
 	}
 	dev->bulk_in->driver_data = dev;
 
 	if (dev->bulk_out->driver_data)
 		usb_ep_disable(dev->bulk_out);
 
-	ret = usb_ep_enable(dev->bulk_out,
-			ep_choose(cdev->gadget, &hs_mtpg_out_desc,
-						&fs_mtpg_out_desc));
+	ret = config_ep_by_speed(cdev->gadget, f, dev->bulk_out);
 	if (ret) {
-		usb_ep_disable(dev->bulk_out);
-		dev->bulk_out->driver_data = NULL;
-		 printk(KERN_ERR "[%s] Enable Bulk-Out EP error%d\n",
-							__func__, __LINE__);
+		dev->bulk_out->desc = NULL;
+		ERROR(cdev, "config_ep_by_speed failes for ep %s, result %d\n",
+			dev->bulk_out->name, ret);
+		return ret;
+	}
+	ret = usb_ep_enable(dev->bulk_out);
+	if (ret) {
+		ERROR(cdev, "failed to enable ep %s, result %d\n",
+			dev->bulk_out->name, ret);
 		return ret;
 	}
 	dev->bulk_out->driver_data = dev;

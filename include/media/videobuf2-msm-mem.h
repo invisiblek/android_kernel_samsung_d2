@@ -16,10 +16,8 @@
 #define _VIDEOBUF2_PMEM_CONTIG_H
 
 #include <media/videobuf2-core.h>
-#include <mach/msm_subsystem_map.h>
-#include <linux/ion.h>
-
-#define CACHABLE_MEMORY
+#include <mach/iommu_domains.h>
+#include <linux/msm_ion.h>
 
 struct videobuf2_mapping {
 	unsigned int count;
@@ -60,10 +58,6 @@ struct videobuf2_contig_pmem {
 	void *alloc_ctx;
 	unsigned long mapped_phyaddr;
 	struct ion_handle *ion_handle;
-#if defined(CACHABLE_MEMORY)
-	void *kernel_vaddr;
-	unsigned long ion_flags;
-#endif
 	struct ion_client *client;
 };
 void videobuf2_queue_pmem_contig_init(struct vb2_queue *q,
@@ -78,9 +72,10 @@ int videobuf2_pmem_contig_user_get(struct videobuf2_contig_pmem *mem,
 					struct videobuf2_msm_offset *offset,
 					enum videobuf2_buffer_type,
 					uint32_t addr_offset, int path,
-					struct ion_client *client);
+					struct ion_client *client,
+					int domain_num);
 void videobuf2_pmem_contig_user_put(struct videobuf2_contig_pmem *mem,
-					struct ion_client *client);
+				struct ion_client *client, int domain_num);
 unsigned long videobuf2_to_pmem_contig(struct vb2_buffer *buf,
 					unsigned int plane_no);
 

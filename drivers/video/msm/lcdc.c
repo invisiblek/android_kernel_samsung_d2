@@ -37,6 +37,7 @@ static int lcdc_remove(struct platform_device *pdev);
 
 static int lcdc_off(struct platform_device *pdev);
 static int lcdc_on(struct platform_device *pdev);
+static void cont_splash_clk_ctrl(int enable);
 
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
@@ -83,8 +84,6 @@ static int lcdc_off(struct platform_device *pdev)
 		}
 		clk_disable_unprepare(mfd->ebi1_clk);
 	}
-#else
-	mdp_bus_scale_update_request(0);
 #endif
 
 	return ret;
@@ -100,14 +99,14 @@ static int lcdc_on(struct platform_device *pdev)
 #endif
 	mfd = platform_get_drvdata(pdev);
 
+	cont_splash_clk_ctrl(0);
+
 	if (lcdc_pdata && lcdc_pdata->lcdc_get_clk)
 		panel_pixclock_freq = lcdc_pdata->lcdc_get_clk();
 
 	if (!panel_pixclock_freq)
 		panel_pixclock_freq = mfd->fbi->var.pixclock;
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(2);
-#else
+#ifndef CONFIG_MSM_BUS_SCALING
 	if (panel_pixclock_freq > 65000000)
 		/* pm_qos_rate should be in Khz */
 		pm_qos_rate = panel_pixclock_freq / 1000 ;
@@ -149,6 +148,20 @@ static int lcdc_on(struct platform_device *pdev)
 
 out:
 	return ret;
+}
+
+static void cont_splash_clk_ctrl(int enable)
+{
+	static int cont_splash_clks_enabled;
+	if (enable && !cont_splash_clks_enabled) {
+		clk_prepare_enable(pixel_mdp_clk);
+		clk_prepare_enable(pixel_lcdc_clk);
+		cont_splash_clks_enabled = 1;
+	} else if (!enable && cont_splash_clks_enabled) {
+		clk_disable_unprepare(pixel_mdp_clk);
+		clk_disable_unprepare(pixel_lcdc_clk);
+		cont_splash_clks_enabled = 0;
+	}
 }
 
 static int lcdc_probe(struct platform_device *pdev)
@@ -198,6 +211,8 @@ static int lcdc_probe(struct platform_device *pdev)
 	mdp_dev = platform_device_alloc("mdp", pdev->id);
 	if (!mdp_dev)
 		return -ENOMEM;
+
+	cont_splash_clk_ctrl(1);
 
 	/*
 	 * link to the latest pdev

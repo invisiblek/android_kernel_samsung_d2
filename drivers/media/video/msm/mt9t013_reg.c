@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -271,5 +271,3 @@ struct mt9t013_reg mt9t013_regs = {
 	.rftbl = &mt9t013_lc_tbl[0],	/* &mt9t013_rolloff_tbl[0], */
 	.rftbl_size = ARRAY_SIZE(mt9t013_lc_tbl)
 };
-
-

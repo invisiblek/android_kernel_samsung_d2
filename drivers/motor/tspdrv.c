@@ -53,7 +53,7 @@
 #if defined(VIBE_DEBUG) && defined(VIBE_RECORD)
 #include <tspdrvRecorder.c>
 #endif
-
+#include <mach/msm_xo.h>
 /* Device name and version information */
 /* DO NOT CHANGE - this is auto-generated */
 #define VERSION_STR " v3.4.55.7\n"
@@ -129,7 +129,11 @@ static int set_vibetonz(int timeout)
 	} else {
 		DbgOut((KERN_INFO "tspdrv: ENABLE\n"));
 		if (vibrator_drvdata.vib_model == HAPTIC_PWM) {
-			strength = 120;
+			#if defined(CONFIG_MACH_JF_TMO)
+				strength = 79;
+			#else
+				strength = 119;
+			#endif
 			/* 90% duty cycle */
 			ImmVibeSPI_ForceOut_SetSamples(0, 8, 1, &strength);
 		} else { /* HAPTIC_MOTOR */
@@ -184,7 +188,7 @@ static void enable_vibetonz_from_user(struct timed_output_dev *dev, int value)
 	vibrator_work = value;
 	schedule_work(&vibetonz_work);
 
-	if (value > 0) {
+	if (value > 0 && (value != TEST_MODE_TIME)) {
 		if (value > max_timeout)
 			value = max_timeout;
 
@@ -302,100 +306,35 @@ static __devinit int tspdrv_probe(struct platform_device *pdev)
 
 	/* This condition will be removed,after all board files changes done */
 	if (pdev->dev.platform_data == NULL) {
-		vibrator_drvdata.is_pmic_vib_en = 0;
-#if defined(CONFIG_MACH_M2_ATT) || defined(CONFIG_MACH_M2_VZW) || \
-defined(CONFIG_MACH_M2_SPR) || defined(CONFIG_MACH_M2_DCM) || \
-defined(CONFIG_MACH_M2_SKT) || defined(CONFIG_MACH_JAGUAR) || \
-defined(CONFIG_MACH_AEGIS2) || defined(CONFIG_MACH_COMANCHE)
-		vibrator_drvdata.vib_pwm_gpio = GPIO_VIB_PWM;
-		vibrator_drvdata.vib_en_gpio = GPIO_VIB_ON;
-		vibrator_drvdata.haptic_pwr_en_gpio = GPIO_HAPTIC_PWR_EN;
-		vibrator_drvdata.vib_model = HAPTIC_PWM;
-#endif
-#if defined(CONFIG_MACH_APEXQ) || defined(CONFIG_MACH_JASPER) || \
-defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_ESPRESSO_ATT)
-		vibrator_drvdata.vib_pwm_gpio = GPIO_MOTOR_EN;
-		vibrator_drvdata.vib_en_gpio = GPIO_MOTOR_EN;
-		vibrator_drvdata.haptic_pwr_en_gpio = GPIO_MOTOR_EN;
-		vibrator_drvdata.vib_model = HAPTIC_MOTOR;
-#endif
-#ifdef CONFIG_MACH_M2_ATT
-		if (system_rev >= BOARD_REV04) {
-			vibrator_drvdata.vib_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_VIB_ON);
-			vibrator_drvdata.is_pmic_vib_en = 1;
-		}
-		if (system_rev >= BOARD_REV08) {
-			vibrator_drvdata.haptic_pwr_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_HAPTIC_PWR_EN);
-			vibrator_drvdata.is_pmic_haptic_pwr_en = 1;
-		}
-#endif
-#ifdef CONFIG_MACH_M2_VZW
-		if (system_rev >= BOARD_REV09) {
-			vibrator_drvdata.vib_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_VIB_ON);
-			vibrator_drvdata.is_pmic_vib_en = 1;
-		}
-#endif
-#ifdef CONFIG_MACH_M2_SPR
-	if (system_rev >= BOARD_REV03) {
-			vibrator_drvdata.vib_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_VIB_ON);
-			vibrator_drvdata.is_pmic_vib_en = 1;
-		}
-#endif
-#ifdef CONFIG_MACH_M2_DCM
-	if (system_rev >= BOARD_REV01) {
-			vibrator_drvdata.vib_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_VIB_ON);
-			vibrator_drvdata.is_pmic_vib_en = 1;
-		}
-#endif
-#ifdef CONFIG_MACH_AEGIS2
-	if (system_rev >= BOARD_REV01) {
-			vibrator_drvdata.vib_en_gpio = PM8921_GPIO_PM_TO_SYS(\
-						PMIC_GPIO_VIB_ON);
-			vibrator_drvdata.is_pmic_vib_en = 1;
-		}
-#endif
+		DbgOut(KERN_ERR "tspdrv: tspdrv probe failed, pdata is NULL");
+		return -EINVAL;
 	} else {
 		pdata = pdev->dev.platform_data;
 		vibrator_drvdata.vib_model = pdata->vib_model;
-#ifndef CONFIG_HAPTIC_DRV2603
 		vibrator_drvdata.is_pmic_haptic_pwr_en = \
-						pdata->is_pmic_haptic_pwr_en;
-		if (pdata->is_pmic_haptic_pwr_en)
-			vibrator_drvdata.haptic_pwr_en_gpio = \
-			PM8921_GPIO_PM_TO_SYS(pdata->haptic_pwr_en_gpio);
-		else
-			vibrator_drvdata.haptic_pwr_en_gpio = \
-				pdata->haptic_pwr_en_gpio;
-#endif
+				pdata->is_pmic_haptic_pwr_en;
 		if (pdata->vib_model == HAPTIC_PWM) {
-			vibrator_drvdata.vib_pwm_gpio = pdata->vib_pwm_gpio;
-			vibrator_drvdata.is_pmic_vib_en = \
-				pdata->is_pmic_vib_en;
-			if (pdata->is_pmic_vib_en)
-				vibrator_drvdata.vib_en_gpio = \
-				PM8921_GPIO_PM_TO_SYS(pdata->vib_en_gpio);
+			if (pdata->is_pmic_vib_pwm)
+				vibrator_drvdata.vib_pwm_gpio = \
+				PM8921_GPIO_PM_TO_SYS(pdata->vib_pwm_gpio);
 			else
-				vibrator_drvdata.vib_en_gpio = \
-						pdata->vib_en_gpio;
+				vibrator_drvdata.vib_pwm_gpio =
+					pdata->vib_pwm_gpio;
 		}
+		vibrator_drvdata.power_onoff = pdata->power_onoff;
 	}
 #ifdef IMPLEMENT_AS_CHAR_DRIVER
 	g_nmajor = register_chrdev(0, MODULE_NAME, &fops);
 	if (g_nmajor < 0) {
 		DbgOut((KERN_ERR "tspdrv: can't get major number.\n"));
 		ret = g_nmajor;
-		goto register_err;
+		return ret;
 	}
 #else
 	ret = misc_register(&miscdev);
 	if (ret) {
 		DbgOut((KERN_ERR "tspdrv: misc_register failed.\n"));
-		goto register_err;
+		return ret;
 	}
 #endif
 
@@ -411,11 +350,12 @@ defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_ESPRESSO_ATT)
 	for (i = 0; i < NUM_ACTUATORS; i++) {
 		char *szName = g_szdevice_name + g_cchdevice_name;
 		ImmVibeSPI_Device_GetName(i,
-			szName, VIBE_MAX_DEVICE_NAME_LENGTH);
+				szName, VIBE_MAX_DEVICE_NAME_LENGTH);
 
 		/* Append version information and get buffer length */
-		strncat(szName, VERSION_STR, sizeof(VERSION_STR));
-		g_cchdevice_name += strnlen(szName, sizeof(szName));
+		strlcat(szName, VERSION_STR, sizeof(VERSION_STR));
+		g_cchdevice_name +=
+			strnlen(szName, (VIBE_MAX_DEVICE_NAME_LENGTH+VERSION_STR_LEN)*NUM_ACTUATORS);
 
 		g_samples_buffer[i].nindex_playing_buffer = -1;/* Not playing */
 		g_samples_buffer[i].actuator_samples[0].nbuffer_size = 0;
@@ -426,15 +366,6 @@ defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_ESPRESSO_ATT)
 	vibetonz_start();
 
 	return 0;
-
-register_err:
-#ifdef IMPLEMENT_AS_CHAR_DRIVER
-	unregister_chrdev(g_nmajor, MODULE_NAME);
-#else
-	misc_deregister(&miscdev);
-#endif
-
-	return ret;
 }
 
 static int __devexit tspdrv_remove(struct platform_device *pdev)
@@ -547,7 +478,6 @@ static ssize_t write(struct file *file, const char *buf, size_t count,
 			** (Should never happen).
 			*/
 			DbgOut((KERN_EMERG "tspdrv: invalid buffer index.\n"));
-			return 0;
 		}
 
 		/* Check bit depth */
@@ -568,7 +498,6 @@ static ssize_t write(struct file *file, const char *buf, size_t count,
 			** (Should never happen).
 			*/
 			DbgOut((KERN_EMERG "tspdrv: invalid data size.\n"));
-			return 0;
 		}
 
 		/* Check actuator index */
@@ -668,6 +597,7 @@ static long ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case TSPDRV_MAGIC_NUMBER:
+	case TSPDRV_SET_MAGIC_NUMBER:
 		filp->private_data = (void *)TSPDRV_MAGIC_NUMBER;
 		break;
 

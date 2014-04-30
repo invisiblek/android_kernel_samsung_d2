@@ -9,8 +9,6 @@
 #include <linux/io.h>
 #include <linux/personality.h>
 #include <linux/random.h>
-#include <asm/cputype.h>
-#include <asm/system.h>
 #include <asm/cachetype.h>
 
 static inline unsigned long COLOUR_ALIGN_DOWN(unsigned long addr,
@@ -72,24 +70,15 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
 	unsigned long start_addr;
-#if defined(CONFIG_CPU_V6) || defined(CONFIG_CPU_V6K)
-	unsigned int cache_type;
-	int do_align = 0, aliasing = 0;
+	int do_align = 0;
+	int aliasing = cache_is_vipt_aliasing();
 
 	/*
 	 * We only need to do colour alignment if either the I or D
-	 * caches alias.  This is indicated by bits 9 and 21 of the
-	 * cache type register.
+	 * caches alias.
 	 */
-	cache_type = read_cpuid_cachetype();
-	if (cache_type != read_cpuid_id()) {
-		aliasing = (cache_type | cache_type >> 12) & (1 << 11);
-		if (aliasing)
-			do_align = filp || flags & MAP_SHARED;
-	}
-#else
-int do_align = 0, aliasing = 0;
-#endif
+	if (aliasing)
+		do_align = filp || (flags & MAP_SHARED);
 
 	/*
 	 * We enforce the MAP_FIXED case.
@@ -331,3 +320,4 @@ int devmem_is_allowed(unsigned long pfn)
 }
 
 #endif
+

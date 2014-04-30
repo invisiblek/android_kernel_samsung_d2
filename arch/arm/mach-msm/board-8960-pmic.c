@@ -22,6 +22,7 @@
 #include <mach/restart.h>
 #include "devices.h"
 #include "board-8960.h"
+
 struct pm8xxx_gpio_init {
 	unsigned			gpio;
 	struct pm_gpio			config;
@@ -87,64 +88,36 @@ struct pm8xxx_mpp_init {
 			PM_GPIO_STRENGTH_HIGH, \
 			PM_GPIO_FUNC_NORMAL, 0, 0)
 
+#define PM8XXX_GPIO_OUTPUT_STRENGTH(_gpio, _val, _out_strength) \
+	PM8XXX_GPIO_INIT(_gpio, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, _val, \
+			PM_GPIO_PULL_NO, PM_GPIO_VIN_S4, \
+			_out_strength, \
+			PM_GPIO_FUNC_NORMAL, 0, 0)
 
 /* Initial PM8921 GPIO configurations */
 static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
-#if !defined(CONFIG_MACH_M2_DCM) && !defined(CONFIG_MACH_K2_KDI)
+	PM8XXX_GPIO_OUTPUT_VIN(21, 0, PM_GPIO_VIN_L4),
+	PM8XXX_GPIO_OUTPUT_VIN(6, 1, PM_GPIO_VIN_VPH),	 /* MHL power EN_N */
+	//PM8XXX_GPIO_DISABLE(7),				 /* Disable NFC */
 	PM8XXX_GPIO_INPUT(16,	    PM_GPIO_PULL_UP_30), /* SD_CARD_WP */
     /* External regulator shared by display and touchscreen on LiQUID */
-	PM8XXX_GPIO_OUTPUT_VIN(21, 1, PM_GPIO_VIN_VPH),	 /* Backlight Enable */
+	PM8XXX_GPIO_OUTPUT(17,	    0),			 /* DISP 3.3 V Boost */
+	PM8XXX_GPIO_OUTPUT(18,	0),	/* TABLA SPKR_LEFT_EN=off */
+	PM8XXX_GPIO_OUTPUT(19,	0),	/* TABLA SPKR_RIGHT_EN=off */
 	PM8XXX_GPIO_DISABLE(22),			 /* Disable NFC */
-#endif
-	PM8XXX_GPIO_OUTPUT_FUNC(24, 0, PM_GPIO_FUNC_2),	 /* Bl: Off, PWM mode */
-#if defined(CONFIG_FB_MSM_MIPI_BOEOT_TFT_VIDEO_WSVGA_PT_PANEL) \
-	|| defined(CONFIG_FB_MSM_MIPI_SAMSUNG_TFT_VIDEO_WXGA_PT_PANEL)
-	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2), /* LED_BACKLIGHT_PWM */
-#endif /* CONFIG_MACH_ESPRESSO_VZW/ATT */
-#if defined(CONFIG_FB_MSM_MIPI_NOVATEK_VIDEO_WXGA_PT_PANEL)
-		PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2), /* LED_BACKLIGHT_PWM */
-#endif
-	PM8XXX_GPIO_INPUT(26,	    PM_GPIO_PULL_NO), /* SD_CARD_DET_N */
-#if defined(CONFIG_FB_MSM_MIPI_BOEOT_TFT_VIDEO_WSVGA_PT_PANEL) \
-	|| defined(CONFIG_FB_MSM_MIPI_SAMSUNG_TFT_VIDEO_WXGA_PT_PANEL)
-	PM8XXX_GPIO_OUTPUT(43,	    0), /* LED_BACKLIGHT_RESET */
-#else
-	PM8XXX_GPIO_OUTPUT(43,	    1), /* DISP_RESET_N */
-#endif
-	PM8XXX_GPIO_INPUT(42, PM_GPIO_PULL_NO), /* USB 5V reg enable */
-#if defined(CONFIG_CHARGER_SMB347)
-	PM8XXX_GPIO_INPUT(17, PM_GPIO_PULL_UP_30), /* CHG_STAT */
-#else
-	PM8XXX_GPIO_OUTPUT(17,	 0),	 /* DISP 3.3 V Boost */
-#endif
-#if defined(CONFIG_MACH_ESPRESSO_VZW) || defined(CONFIG_MACH_ESPRESSO10_VZW) \
-		|| defined(CONFIG_MACH_ESPRESSO10_ATT) \
-		|| defined(CONFIG_MACH_ESPRESSO10_SPR) \
-		|| defined(CONFIG_MACH_ESPRESSO_SPR)
-	PM8XXX_GPIO_OUTPUT(38,   1),
-#endif
-
-#if defined(CONFIG_MACH_AEGIS2) /* Disable NC GPIOs for AEGIS2*/
-	PM8XXX_GPIO_DISABLE(1),
-	PM8XXX_GPIO_DISABLE(2),
-	PM8XXX_GPIO_DISABLE(9),
-	PM8XXX_GPIO_DISABLE(15),
-	PM8XXX_GPIO_DISABLE(23),
-	PM8XXX_GPIO_DISABLE(28),
-	PM8XXX_GPIO_DISABLE(35),
-	PM8XXX_GPIO_DISABLE(40),
-	PM8XXX_GPIO_DISABLE(41),
-#endif
+	PM8XXX_GPIO_OUTPUT(24, 0),	 /* ISP_STANDBY */
+	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* TN_CLK */
+	PM8XXX_GPIO_INPUT(26,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
+	PM8XXX_GPIO_OUTPUT(43, 1),                       /* DISP_RESET_N */
+	PM8XXX_GPIO_OUTPUT(42, 0),                      /* USB 5V reg enable */
+	/* TABLA CODEC RESET */
+	//PM8XXX_GPIO_OUTPUT_STRENGTH(34, 0, PM_GPIO_STRENGTH_MED)
 };
 
 /* Initial PM8921 MPP configurations */
 static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
 	PM8XXX_MPP_INIT(7, D_INPUT, PM8921_MPP_DIG_LEVEL_VPH, DIN_TO_INT),
-#ifdef CONFIG_OPTICAL_GP2A
-	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_4, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH7,
-		DOUT_CTRL_LOW),
-#endif
 	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
 };
@@ -211,6 +184,11 @@ static struct pm8xxx_adc_amux pm8xxx_adc_channels_data[] = {
 	{"earjack", ADC_MPP_1_AMUX6_SCALE_DEFAULT,
 		CHAN_PATH_SCALING1, AMUX_RSV1,
 		ADC_DECIMATION_TYPE2, ADC_SCALE_DEFAULT},
+#endif
+
+#ifdef CONFIG_SEC_THERMISTOR
+	{"app_thm", ADC_MPP_1_AMUX6, CHAN_PATH_SCALING1, AMUX_RSV1,
+		ADC_DECIMATION_TYPE2, ADC_SCALE_SEC_BOARD_THERM},  /*app_thm */
 #endif
 };
 
@@ -281,11 +259,12 @@ static struct pm8xxx_keypad_platform_data keypad_data_liquid = {
 	.keymap_data            = &keymap_data_liquid,
 };
 
+
 static const unsigned int keymap[] = {
-	KEY(0, 0, KEY_SEARCH),
-	KEY(0, 1, KEY_BACK),
-	KEY(0, 2, KEY_HOME),
-	KEY(0, 3, KEY_MENU),
+	KEY(0, 0, KEY_VOLUMEUP),
+	KEY(0, 1, KEY_VOLUMEDOWN),
+	KEY(0, 2, KEY_CAMERA_FOCUS),
+	KEY(0, 3, KEY_CAMERA_SNAPSHOT),
 };
 
 static struct matrix_keymap_data keymap_data = {
@@ -421,25 +400,6 @@ static const unsigned int keymap_sim[] = {
 	KEY(0, 3, KEY_CAMERA_FOCUS),
 };
 
-static struct matrix_keymap_data keymap_data_sim = {
-	.keymap_size    = ARRAY_SIZE(keymap_sim),
-	.keymap         = keymap_sim,
-};
-
-static struct pm8xxx_keypad_platform_data keypad_data_sim = {
-	.input_name             = "keypad_8960",
-	.input_phys_device      = "keypad_8960/input0",
-	.num_rows               = 12,
-	.num_cols               = 8,
-	.rows_gpio_start        = PM8921_GPIO_PM_TO_SYS(9),
-	.cols_gpio_start        = PM8921_GPIO_PM_TO_SYS(1),
-	.debounce_ms            = 15,
-	.scan_delay_ms          = 32,
-	.row_hold_ns            = 91500,
-	.wakeup                 = 1,
-	.keymap_data            = &keymap_data_sim,
-};
-
 static int pm8921_therm_mitigation[] = {
 	1100,
 	700,
@@ -450,18 +410,7 @@ static int pm8921_therm_mitigation[] = {
 #define MAX_VOLTAGE_MV		4200
 #define CHG_TERM_MA		100
 static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
-#ifdef CONFIG_PM8921_SEC_CHARGER
-	.safety_time		= 512, /* max */
-	.update_time		= 30000,
-	.cool_temp		= 0,
-	.warm_temp		= 0,
-	.get_cable_type		= msm8960_get_cable_type,
-#else
-	.safety_time		= 180,
 	.update_time		= 60000,
-	.cool_temp		= 10,
-	.warm_temp		= 45,
-#endif /* CONFIG_PM8921_SEC_CHARGER */
 	.max_voltage		= MAX_VOLTAGE_MV,
 	.min_voltage		= 3200,
 	.uvd_thresh_voltage	= 4050,
@@ -470,6 +419,8 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.resume_voltage_delta	= 60,
 	.resume_charge_percent	= 99,
 	.term_current		= CHG_TERM_MA,
+	.cool_temp		= 10,
+	.warm_temp		= 45,
 	.temp_check_period	= 1,
 	.max_bat_chg_current	= 1100,
 	.cool_bat_chg_current	= 350,
@@ -984,6 +935,17 @@ static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
 	.calib_delay_ms		= 600000,
 };
 
+/**
+ * PM8XXX_PWM_DTEST_CHANNEL_NONE shall be used when no LPG
+ * channel should be in DTEST mode.
+ */
+
+#define PM8XXX_PWM_DTEST_CHANNEL_NONE   (-1)
+
+static struct pm8xxx_pwm_platform_data pm8xxx_pwm_pdata = {
+	.dtest_channel	= PM8XXX_PWM_DTEST_CHANNEL_NONE,
+};
+
 static struct pm8921_platform_data pm8921_platform_data __devinitdata = {
 	.irq_pdata		= &pm8xxx_irq_pdata,
 	.gpio_pdata		= &pm8xxx_gpio_pdata,
@@ -998,6 +960,7 @@ static struct pm8921_platform_data pm8921_platform_data __devinitdata = {
 	.adc_pdata		= &pm8xxx_adc_pdata,
 	.leds_pdata		= &pm8xxx_leds_pdata,
 	.ccadc_pdata		= &pm8xxx_ccadc_pdata,
+	.pwm_pdata		= &pm8xxx_pwm_pdata,
 };
 
 static struct msm_ssbi_platform_data msm8960_ssbi_pm8921_pdata __devinitdata = {
@@ -1008,66 +971,12 @@ static struct msm_ssbi_platform_data msm8960_ssbi_pm8921_pdata __devinitdata = {
 	},
 };
 
-static void msm8921_sec_charger_init(void)
-{
-	/* batt_id */
-	if (machine_is_M2_ATT() && system_rev >= 0x02) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_M2_SKT() && system_rev >= 0x02) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_M2_SPR() && system_rev >= 0x01) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_M2_VZW() && system_rev >= 0x04) {
-		pm8921_chg_pdata.batt_id_min = 810000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_M2_DCM() && system_rev >= 0x00) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_K2_KDI() && system_rev >= 0x00) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else if (machine_is_jaguar() && system_rev >= 0x04) {
-		pm8921_chg_pdata.batt_id_min = 860000;
-		pm8921_chg_pdata.batt_id_max = 960000;
-	} else {
-		/*
-		* PMIC ES1 has problem for adc reading
-		* So batt_id min and max should be '0',
-		* Then charger driver will skip batt_id checking
-		*/
-		pm8921_chg_pdata.batt_id_min = 0;
-		pm8921_chg_pdata.batt_id_max = 0;
-	}
-
-	/* battery voltage */
-	if ((machine_is_M2_ATT() && system_rev >= 0x02) ||
-		(machine_is_M2_SPR() && system_rev >= 0x02) ||
-		(machine_is_M2_VZW() && system_rev >= 0x06) ||
-		(machine_is_jaguar() && system_rev >= 0x0A) ||
-		(machine_is_M2_DCM() && system_rev >= 0x00) ||
-		(machine_is_K2_KDI() && system_rev >= 0x00) ||
-		machine_is_JASPER())
-		pm8921_chg_pdata.max_voltage = 4350;
-}
-
 void __init msm8960_init_pmic(void)
 {
-	msm8921_sec_charger_init();
-
-#if !defined(CONFIG_MACH_AEGIS2) && !defined(CONFIG_MACH_JASPER)\
-	&& !defined(CONFIG_MACH_M2_VZW)
 	pmic_reset_irq = PM8921_IRQ_BASE + PM8921_RESOUT_IRQ;
-#endif
 	msm8960_device_ssbi_pmic.dev.platform_data =
 				&msm8960_ssbi_pm8921_pdata;
 	pm8921_platform_data.num_regulators = msm_pm8921_regulator_pdata_len;
-
-	/* Simulator supports a QWERTY keypad */
-	if (machine_is_msm8960_sim())
-		pm8921_platform_data.keypad_pdata = &keypad_data_sim;
 
 	if (machine_is_msm8960_liquid()) {
 		pm8921_platform_data.keypad_pdata = &keypad_data_liquid;

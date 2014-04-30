@@ -30,6 +30,8 @@ struct pm8xxx_gpio_core_data {
 struct pm8xxx_gpio_platform_data {
 	struct pm8xxx_gpio_core_data	gpio_cdata;
 	int				gpio_base;
+	int				*dbg_gpios;
+	int				dbg_gpio_len;
 };
 
 /* GPIO parameters */
@@ -77,6 +79,16 @@ struct pm8xxx_gpio_platform_data {
 #define PM8038_GPIO_VIN_L4		4
 #define PM8038_GPIO_VIN_L3		5
 #define PM8038_GPIO_VIN_L17		6
+
+/* vin_sel: Voltage Input Select on PM8018*/
+#define PM8018_GPIO_VIN_L4		0
+#define PM8018_GPIO_VIN_L14		1
+#define PM8018_GPIO_VIN_S3		2
+#define PM8018_GPIO_VIN_L6		3
+#define PM8018_GPIO_VIN_L2		4
+#define PM8018_GPIO_VIN_L5		5
+#define PM8018_GPIO_VIN_L8		6
+#define PM8018_GPIO_VIN_VPH		7
 
 /* out_strength */
 #define	PM_GPIO_STRENGTH_NO		0
@@ -142,11 +154,13 @@ struct pm_gpio {
  * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
  */
 int pm8xxx_gpio_config(int gpio, struct pm_gpio *param);
+void pm_gpio_dbg_showall(unsigned int level);
 #else
 static inline int pm8xxx_gpio_config(int gpio, struct pm_gpio *param)
 {
 	return -ENXIO;
 }
+static inline void pm_gpio_dbg_showall(unsigned int level) {}
 #endif
 
 #endif

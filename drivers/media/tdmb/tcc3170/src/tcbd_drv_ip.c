@@ -195,8 +195,8 @@ s32 tcbd_send_spur_data(struct tcbd_device *_device, s32 _freq_khz)
 		ret = tcbd_write_mail_box(_device, MBCMD_FP_DAB_IIR,
 						spur_table[i].num_data,
 						spur_table[i].data);
-		break;
-	}
+			break;
+		}
 
 	return ret;
 }
@@ -222,7 +222,7 @@ s32 tcbd_send_agc_data(struct tcbd_device *_device,
 		return -1;
 	}
 	tcbd_debug(DEBUG_DRV_COMP, "agc table size:%d, band:%s\n", size_table,
-			(_band_type == BAND_TYPE_LBAND) ? "Lband" : "Band3");
+		(_band_type == BAND_TYPE_LBAND) ? "Lband" : "Band3");
 
 	for (i = 0; i < size_table; i++) {
 		ret |= tcbd_write_mail_box(_device, agc_table[i].cmd,
@@ -299,8 +299,8 @@ s32 tcbd_send_service_info(struct tcbd_device *_device)
 
 	tcbd_sort_start_cu(mult_service, mci_param);
 
-	mci_param[1] |= DEINT_BIT_COMP_NONE;
-	mci_update = mult_service->service_count | DEINT_ADDR_ASSIGN_ALL_BIT;
+	mci_param[1] |= DEINT_BIT_COMP_5TO3;
+	mci_update = mult_service->service_count | DEINT_ADDR_ASSIGN_3BIT;
 
 	ret = tcbd_write_mail_box(_device, MBPARA_SEL_CH_INFO_PRAM,
 					num_svc, mci_param);
@@ -406,7 +406,7 @@ s32 tcbd_init_buffer_region(struct tcbd_device *_device)
 }
 
 s32 tcbd_change_memory_view(struct tcbd_device *_device,
-				enum tcbd_remap_type _remap)
+	enum tcbd_remap_type _remap)
 {
 	return tcbd_reg_write(_device, TCBD_INIT_REMAP, (u8)_remap);
 }
@@ -428,7 +428,7 @@ u32 tcbd_get_osc_clock(struct tcbd_device *_device)
 
 s32 tcbd_init_pll(struct tcbd_device *_device, enum tcbd_clock_type _ctype)
 {
-	/*
+   /*
 	* _pll_data[0] = PLL_WAIT_TIME
 	* _pll_data[1] = PLL_P
 	* _pll_data[2] = PLL_M
@@ -624,7 +624,7 @@ s32 tcbd_dsp_warm_start(struct tcbd_device *_device)
 
 	if (ret >= 0)
 		tcbd_debug(DEBUG_DRV_COMP, "Warm boot succeed! [0x%X] ret:%d\n",
-							mail.data[0], ret);
+				mail.data[0], ret);
 	return ret;
 }
 
@@ -736,15 +736,15 @@ s32 tcbd_init_dsp(struct tcbd_device *_device, u8 *_boot_code, s32 _size)
 	ret |= tcbd_change_memory_view(_device, EP_RAM0_RAM1);
 
 	for (i = 0; i < num_table_entry && boot_bin[i].size; i++) {
-		tcbd_debug(DEBUG_API_COMMON, "# download boot to 0x%X, "
+		tcbd_debug(DEBUG_API_COMMON, "# download boot to 0x%X, "\
 						"size %d\n", boot_bin[i].addr,
-						boot_bin[i].size);
+				boot_bin[i].size);
 		ret |= tcbd_mem_write(_device, boot_bin[i].addr,
 					boot_bin[i].data, boot_bin[i].size);
 		ret |= tcbd_reg_read_burst_cont(_device, TCBD_CMDDMA_CRC32,
 				(u8 *)&dma_crc, 4);
 		if (boot_bin[i].crc && (SWAP32(dma_crc) != boot_bin[i].crc)) {
-			tcbd_debug(DEBUG_ERROR, "# CRC Error DMA[0x%08X] !="
+			tcbd_debug(DEBUG_ERROR, "# CRC Error DMA[0x%08X] !="\
 						" BIN[0x%08X]\n", dma_crc,
 						boot_bin[i].crc);
 			return -TCERR_CRC_FAIL;

@@ -37,7 +37,9 @@
 int touch_is_pressed;
 EXPORT_SYMBOL(touch_is_pressed);
 #endif */
-
+#if defined(CONFIG_SEC_PRODUCT_8960)
+extern unsigned int system_rev;
+#endif
 static int melfas_mux_fw_flash(bool to_gpios)
 {
 	if (to_gpios) {
@@ -235,7 +237,7 @@ int is_melfas_vdd_on(void)
 #if defined(CONFIG_MACH_ESPRESSO_VZW) || defined(CONFIG_MACH_ESPRESSO_ATT) \
 				|| defined(CONFIG_MACH_ESPRESSO10_VZW) \
 				|| defined(CONFIG_MACH_ESPRESSO_SPR)
-	static struct regulator *reg_l11;				
+	static struct regulator *reg_l11;
 	if (system_rev < BOARD_REV03) {
 		if (!reg_l17) {
 			reg_l17 = regulator_get(NULL, "8921_l17");
@@ -304,7 +306,6 @@ int is_melfas_vdd_on(void)
 #endif
 }
 
-
 #if defined(CONFIG_TOUCHSCREEN_MMS136) ||defined(CONFIG_TOUCHSCREEN_MMS144)
 static void melfas_register_callback(struct tsp_callbacks *cb)
 {
@@ -317,9 +318,7 @@ static void melfas_register_callback(struct tsp_callbacks *cb)
 	defined(CONFIG_TOUCHSCREEN_MMS136_TABLET)
 #define USE_TOUCHKEY 1
 static u8 touchkey_keycode[] = {KEY_MENU, KEY_HOMEPAGE, KEY_BACK};
-#if !defined(CONFIG_MACH_ESPRESSO_VZW)
 static u8 touchkey_keycode_4key[] = {KEY_BACK, KEY_HOMEPAGE, KEY_F3, KEY_MENU};
-#endif
 #endif
 
 static struct mms_ts_platform_data mms_ts_pdata = {
@@ -352,10 +351,6 @@ static struct mms_ts_platform_data mms_ts_pdata = {
 	.gpio_scl	= GPIO_TOUCH_SCL,
 	.gpio_sda	= GPIO_TOUCH_SDA,
 	.check_module_type = false,
-#if defined(CONFIG_MACH_ESPRESSO_VZW)
-	.invert_y	= true,
-	.flip_xy	= true,
-#endif
 };
 
 static struct i2c_board_info __initdata mms_i2c3_boardinfo_final[] = {

@@ -17,25 +17,25 @@
 #include <linux/types.h>
 #include <mach/board.h>
 
-#define	S5K6AA_DEBUG	
+#define	S5K6AA_DEBUG
 #ifdef S5K6AA_DEBUG
 #define CAM_DEBUG(fmt, arg...)	\
 		do {\
 			printk("\033[[S5K6AA] %s:%d: " fmt "\033[0m\n", __FUNCTION__, __LINE__, ##arg);}\
 		while(0)
-			
+
 #define cam_info(fmt, arg...)	\
 		do {\
 		printk(KERN_INFO "[S5K6AA]" fmt "\n",##arg);}\
 		while(0)
-			
+
 #define cam_err(fmt, arg...)	\
 		do {\
 		printk(KERN_ERR "[S5K6AA] %s:%d:" fmt "\n",__FUNCTION__, __LINE__, ##arg);}\
 		while(0)
-			
+
 #else
-#define CAM_DEBUG(fmt, arg...)	
+#define CAM_DEBUG(fmt, arg...)
 #define cam_info(fmt, arg...)
 #define cam_err(fmt, arg...)
 #endif
@@ -76,7 +76,7 @@ struct s5k6aa_userset {
 	unsigned int fps;
 	unsigned int flash_mode;
 	unsigned int flash_state;
-	
+
 	unsigned int stabilize;	/* IS */
 
 	unsigned int strobe;
@@ -86,7 +86,7 @@ struct s5k6aa_userset {
 	unsigned int preview_size_idx;
 	unsigned int capture_size;
 	unsigned int thumbnail_size;
-	
+
 
 };
 
@@ -192,5 +192,5 @@ struct s5k6aa_reg {
 	const struct reg_struct_init  *reg_pat_init;
 	const struct reg_struct  *reg_pat;
 };
-    */                                   
+    */
 #endif /* __S5K6AA_H__ */

@@ -29,16 +29,18 @@
 #include <linux/msm_adc.h>
 #include <linux/earlysuspend.h>
 #include <linux/sec_battery.h>
-#include <linux/charging_temperature_data.h>
 #include <linux/gpio.h>
 #include <mach/msm8960-gpio.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
+#include <mach/board.h>
+#include <asm/system_info.h>
 
 #define FG_T_SOC		0
 #define FG_T_VCELL		1
 #define FG_T_PSOC		2
 #define FG_T_RCOMP		3
 #define FG_T_FSOC		4
+#define FG_T_CURRENT	5
 
 #define BATT_STATUS_MISSING		0
 #define BATT_STATUS_PRESENT		1
@@ -78,6 +80,28 @@ enum cable_type_t {
 #endif
 
 };
+
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+/* charging mode */
+enum sec_battery_charging_mode {
+	/* no charging */
+	SEC_BATTERY_CHARGING_NONE = 0,
+	/* 1st charging */
+	SEC_BATTERY_CHARGING_1ST,
+	/* 2nd charging */
+	SEC_BATTERY_CHARGING_2ND,
+	/* recharging */
+	SEC_BATTERY_CHARGING_RECHARGING,
+};
+
+char *sec_bat_charging_mode_str[] = {
+	"None",
+	"Normal",
+	"Additional",
+	"Re-Charging",
+	"ABS"
+};
+#endif
 
 enum batt_full_t {
 	BATT_NOT_FULL = 0,
@@ -148,9 +172,10 @@ struct sec_bat_info {
 	unsigned int batt_full_soc;
 	unsigned int batt_presoc;
 	unsigned int measure_interval;
+	int current_now;		/* current (mA) */
+	int current_avg;		/* average current (mA) */
 	int charging_status;
 	int otg_state;
-	int current_avg;
 	unsigned int batt_temp_adc;
 	unsigned int batt_temp_radc;
 	unsigned int batt_current_adc;
@@ -212,6 +237,13 @@ struct sec_bat_info {
 	bool factory_mode;
 	bool check_full_state;
 	unsigned int check_full_state_cnt;
+
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	int siop_level;
+	unsigned int charging_mode;
+	unsigned long charging_fullcharged_time;
+	unsigned long charging_fullcharged_2nd_duration;
+#endif
 };
 
 static char *supply_list[] = {
@@ -404,6 +436,9 @@ static int sec_bat_get_fuelgauge_data(struct sec_bat_info *info, int type)
 		value.intval = 3;	/*full soc */
 		psy->get_property(psy, POWER_SUPPLY_PROP_CAPACITY, &value);
 		break;
+	case FG_T_CURRENT:
+		psy->get_property(psy, POWER_SUPPLY_PROP_CURRENT_NOW, &value);
+		break;
 	default:
 		return -ENODEV;
 	}
@@ -456,6 +491,8 @@ static int sec_bat_get_property(struct power_supply *ps,
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = info->batt_temp;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		if (info->charging_status == POWER_SUPPLY_STATUS_DISCHARGING &&
@@ -541,8 +578,32 @@ static int sec_bat_handle_charger_topoff(struct sec_bat_info *info)
 
 	if (info->batt_full_status == BATT_NOT_FULL) {
 		info->charging_status = POWER_SUPPLY_STATUS_FULL;
-		info->batt_full_status = BATT_FULL;
 		info->recharging_status = false;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		if (info->charging_mode == SEC_BATTERY_CHARGING_1ST) {
+			info->charging_mode = SEC_BATTERY_CHARGING_2ND;
+			info->charging_fullcharged_time =
+				info->charging_passed_time;
+		} else {
+			info->batt_full_status = BATT_FULL;
+			info->charging_mode = SEC_BATTERY_CHARGING_NONE;
+
+			info->charging_passed_time = 0;
+			info->charging_start_time = 0;
+			info->charging_fullcharged_time = 0;
+			/* disable charging */
+			value.intval = POWER_SUPPLY_STATUS_DISCHARGING;
+			ret = psy->set_property(psy,
+				POWER_SUPPLY_PROP_STATUS, &value);
+
+			info->charging_enabled = false;
+			/* notify full state to fuel guage */
+			value.intval = POWER_SUPPLY_STATUS_FULL;
+			ret = psy_fg->set_property(psy_fg, POWER_SUPPLY_PROP_STATUS,
+							&value);
+		}
+#else
+		info->batt_full_status = BATT_FULL;
 		info->charging_passed_time = 0;
 		info->charging_start_time = 0;
 #if defined(CONFIG_TARGET_LOCALE_USA)
@@ -557,6 +618,7 @@ static int sec_bat_handle_charger_topoff(struct sec_bat_info *info)
 		value.intval = POWER_SUPPLY_STATUS_FULL;
 		ret = psy_fg->set_property(psy_fg, POWER_SUPPLY_PROP_STATUS,
 					   &value);
+#endif
 	}
 	return ret;
 }
@@ -878,7 +940,7 @@ static int pm8921_get_temperature_adc(struct sec_bat_info *info)
 		pr_err("error reading mpp %d, rc = %d\n", TEMP_GPIO, rc);
 		return rc;
 	}
-	pr_debug("batt_temp phy = %lld meas = 0x%llx\n",
+	pr_info("batt_temp phy = %lld meas = 0x%llx\n",
 		result.physical, result.measurement);
 
 	info->batt_temp = (int)result.physical;
@@ -928,7 +990,6 @@ static int sec_bat_check_temper_adc(struct sec_bat_info *info)
 
 #if defined(CONFIG_BATTERY_CTIA)
 	if (info->batt_use) {
-		pr_err("CTIA EVENT charging cut-off Temperature (%d) \n",info->tspec.event_block);
 		if (rescale_adc >= info->tspec.event_block) {
 			if (health != POWER_SUPPLY_HEALTH_OVERHEAT)
 				if (info->batt_temp_high_cnt
@@ -948,7 +1009,6 @@ static int sec_bat_check_temper_adc(struct sec_bat_info *info)
 						info->batt_temp_low_cnt++;
 			}
 	} else {
-		  pr_err("CTIA charging cut-off Temperature (%d) \n",info->tspec.high_block);
 		if (rescale_adc >= info->tspec.high_block) {
 			if (health != POWER_SUPPLY_HEALTH_OVERHEAT)
 				if (info->batt_temp_high_cnt
@@ -970,7 +1030,6 @@ static int sec_bat_check_temper_adc(struct sec_bat_info *info)
 
 	}
 #else
-	  pr_err("Charging cut-off Temperature (%d),CTIA disabled \n",info->tspec.high_block);
 	if (rescale_adc >= info->tspec.high_block) {
 		if (health != POWER_SUPPLY_HEALTH_OVERHEAT)
 			if (info->batt_temp_high_cnt <= TEMP_BLOCK_COUNT)
@@ -1014,6 +1073,94 @@ static void check_chgcurrent(struct sec_bat_info *info)
 	pr_debug("[battery] charging current doesn't exist\n");
 }
 
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+static void sec_bat_check_fullcharged(struct sec_bat_info *info)
+{
+	static int cnt;
+	bool is_full_condition = false;
+
+	struct power_supply *psy = power_supply_get_by_name(info->charger_name);
+	union power_supply_propval value;
+	int ret;
+
+	if (!psy) {
+		dev_err(info->dev, "%s: fail to get charger ps\n", __func__);
+		return;
+	}
+
+	if (info->charging_enabled) {
+		if (info->charging_mode == SEC_BATTERY_CHARGING_1ST) {
+			check_chgcurrent(info);
+			if (info->batt_vcell >= info->full_cond_voltage) {
+				/* check full state with SMB charger register */
+				ret =
+					psy->get_property(psy,
+						      POWER_SUPPLY_PROP_CHARGE_FULL,
+							  &value);
+				if (ret < 0) {
+					dev_err(info->dev,
+						"%s: fail to get charge full(%d)\n",
+						__func__, ret);
+						return;
+				}
+
+				if (info->test_info.test_value == 3) {
+					value.intval = 0;
+					info->batt_current_adc =
+						CURRENT_OF_FULL_CHG + 1;
+				}
+
+				info->is_top_off = value.intval;
+
+				if (info->batt_current_adc == 0) {
+					if (info->is_top_off == 1 &&
+						info->batt_presoc >= 98) {
+						if (is_full_condition == false)
+							wake_lock_timeout(
+							&info->monitor_wake_lock,
+							10 * HZ);
+						is_full_condition = true;
+						pr_info
+							("%s : is_top_off (%d)\n",
+							__func__,
+							info->batt_current_adc);
+					}else
+						is_full_condition = false;
+				}
+			}
+		} else {
+			pr_info("%s : check 2nd charing time [%ldsec]\n",__func__,
+				info->charging_passed_time - info->charging_fullcharged_time);
+
+			if ((info->charging_passed_time - info->charging_fullcharged_time) >
+				info->charging_fullcharged_2nd_duration) {
+				is_full_condition = true;
+			} else {
+				is_full_condition = false;
+			}
+		}
+
+		if (is_full_condition) {
+			cnt++;
+			pr_info("%s : full state? %d, %d\n", __func__,
+				info->batt_current_adc, cnt);
+			if (cnt >= info->full_cond_count) {
+				pr_info("%s : full state!! %d/%d\n",
+					__func__, cnt,
+					info->full_cond_count);
+				sec_bat_handle_charger_topoff(info);
+				cnt = 0;
+			}
+		} else {
+			cnt = 0;
+		}
+	} else {
+		cnt = 0;
+		info->batt_current_adc = 0;
+	}
+	info->test_info.full_count = cnt;
+}
+#else
 static void sec_check_chgcurrent(struct sec_bat_info *info)
 {
 	static int cnt;
@@ -1080,8 +1227,6 @@ static void sec_check_chgcurrent(struct sec_bat_info *info)
 						info->ui_full_charge_status =
 						    true;
 						cnt_ui = 0;
-						pr_err("%s : UI full state! vcell(%d) \n",
-                                                __func__, info->batt_vcell);
 						power_supply_changed(&info->
 								     psy_bat);
 					}
@@ -1097,18 +1242,13 @@ static void sec_check_chgcurrent(struct sec_bat_info *info)
 				}
 */
 			}
-#if defined(CONFIG_MACH_M2_MTR)
-			if ((is_full_condition) &&
-			(info->batt_vcell >= (info->vmax - 15000))) {
-#else
 			if (is_full_condition) {
-#endif
 				cnt++;
 				pr_info("%s : full state? %d, %d\n", __func__,
 					info->batt_current_adc, cnt);
 				if (cnt >= info->full_cond_count) {
-					pr_err("%s : charge done state! voltage(%d), count:%d/%d \n",
-						__func__,info->batt_vcell,cnt,
+					pr_info("%s : full state!! %d/%d\n",
+						__func__, cnt,
 						info->full_cond_count);
 					sec_bat_handle_charger_topoff(info);
 					cnt = 0;
@@ -1125,6 +1265,7 @@ static void sec_check_chgcurrent(struct sec_bat_info *info)
 	}
 	info->test_info.full_count = cnt;
 }
+#endif
 
 static int sec_check_recharging(struct sec_bat_info *info)
 {
@@ -1139,11 +1280,14 @@ static int sec_check_recharging(struct sec_bat_info *info)
 	for (cnt = 0; cnt < 4; cnt++) {
 		info->batt_vcell = sec_bat_get_fuelgauge_data(info, FG_T_VCELL);
 		if ((info->batt_vcell > info->vrechg) ||
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+			(info->charging_mode != SEC_BATTERY_CHARGING_NONE) ||
+#endif
 			(info->charging_status != POWER_SUPPLY_STATUS_FULL))
 			return 0;
 		else {
 			pr_info("%s : cnt = %d\n", __func__, cnt);
-			msleep(5000);
+			mdelay(5000);
 		}
 	}
 	if (cnt == 4) {
@@ -1189,6 +1333,8 @@ static void sec_bat_update_info(struct sec_bat_info *info)
 	info->batt_vcell = sec_bat_get_fuelgauge_data(info, FG_T_VCELL);
 	info->batt_rcomp = sec_bat_get_fuelgauge_data(info, FG_T_RCOMP);
 	info->batt_full_soc = sec_bat_get_fuelgauge_data(info, FG_T_FSOC);
+	info->current_now = sec_bat_get_fuelgauge_data(info, FG_T_CURRENT);
+
 	sec_bat_notify_vcell2charger(info);
 }
 
@@ -1217,8 +1363,7 @@ static int sec_bat_enable_charging(struct sec_bat_info *info, bool enable)
 		case CABLE_TYPE_USB:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
 			val_chg_current.intval = 500;
-			/* Set to ZERO, as low battery popup was not going even after USB cable inserted*/
-			info->current_avg = 0;
+			info->current_avg = -1;
 			break;
 		case CABLE_TYPE_AC:
 		case CABLE_TYPE_CARDOCK:
@@ -1236,13 +1381,13 @@ static int sec_bat_enable_charging(struct sec_bat_info *info, bool enable)
 			if (info->wpc_charging_current == 700)
 				info->current_avg = 0;
 			else
-				info->current_avg = 0;
+				info->current_avg = -1;
 			break;
 #endif
 		case CABLE_TYPE_MISC:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
 			val_chg_current.intval = 700;
-			info->current_avg = 0;
+			info->current_avg = -1;
 			break;
 		case CABLE_TYPE_UNKNOWN:
 			val_type.intval = POWER_SUPPLY_STATUS_CHARGING;
@@ -1292,6 +1437,9 @@ static int sec_bat_enable_charging(struct sec_bat_info *info, bool enable)
 		info->charging_start_time = 0;
 		info->current_avg = -1;
 
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		info->charging_fullcharged_time = 0;
+#endif
 		/* Double check recharging */
 		info->recharging_status = false;
 	}
@@ -1356,6 +1504,9 @@ static void sec_bat_handle_unknown_disable(struct sec_bat_info *info)
 #endif
 #ifdef CONFIG_WIRELESS_CHARGING
 	info->wc_status = false;
+#endif
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	info->charging_mode = SEC_BATTERY_CHARGING_NONE;
 #endif
 	info->charging_status = POWER_SUPPLY_STATUS_DISCHARGING;
 	info->is_timeout_chgstop = false;
@@ -1452,6 +1603,14 @@ static void sec_bat_cable_work(struct work_struct *work)
 		info->recharging_status = false;
 		info->test_info.is_rechg_state = false;
 		info->charging_start_time = 0;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		info->charging_mode = SEC_BATTERY_CHARGING_NONE;
+
+		if (info->charging_status == POWER_SUPPLY_STATUS_FULL) {
+			/* To get SOC value (NOT raw SOC), need to reset value */
+			info->batt_soc = sec_bat_get_fuelgauge_data(info, FG_T_SOC);
+		}
+#endif
 		info->charging_status = POWER_SUPPLY_STATUS_DISCHARGING;
 		info->is_timeout_chgstop = false;
 		info->dcin_intr_triggered = false;
@@ -1519,6 +1678,9 @@ static void sec_bat_cable_work(struct work_struct *work)
 		wake_lock_timeout(&info->vbus_wake_lock, 5 * HZ);
 		cancel_delayed_work(&info->measure_work);
 		info->charging_status = POWER_SUPPLY_STATUS_CHARGING;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		info->charging_mode = SEC_BATTERY_CHARGING_1ST;
+#endif
 		sec_bat_enable_charging(info, true);
 		info->measure_interval = MEASURE_CHG_INTERVAL;
 		queue_delayed_work(info->monitor_wqueue, &info->measure_work,
@@ -1555,6 +1717,9 @@ static void sec_bat_charging_time_management(struct sec_bat_info *info)
 		info->is_timeout_chgstop = false;
 		if (info->charging_status == POWER_SUPPLY_STATUS_FULL)
 			info->recharging_status = true;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		info->charging_mode = SEC_BATTERY_CHARGING_1ST;
+#endif
 		sec_bat_enable_charging(info, true);
 		pr_info("%s: [BATT] chgstop is cancelled\n",
 			 __func__);
@@ -1579,6 +1744,9 @@ static void sec_bat_charging_time_management(struct sec_bat_info *info)
 	case POWER_SUPPLY_STATUS_FULL:
 		if (charging_time > info->rechg_time &&
 			info->recharging_status == true) {
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+			info->charging_mode = SEC_BATTERY_CHARGING_NONE;
+#endif
 			sec_bat_enable_charging(info, false);
 			info->recharging_status = false;
 			info->is_timeout_chgstop = true;
@@ -1588,6 +1756,9 @@ static void sec_bat_charging_time_management(struct sec_bat_info *info)
 		break;
 	case POWER_SUPPLY_STATUS_CHARGING:
 		if (charging_time > info->abs_time) {
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+			info->charging_mode = SEC_BATTERY_CHARGING_NONE;
+#endif
 			sec_bat_enable_charging(info, false);
 			info->charging_status = POWER_SUPPLY_STATUS_FULL;
 			info->is_timeout_chgstop = true;
@@ -1687,11 +1858,17 @@ static void sec_bat_monitor_work(struct work_struct *work)
 
 	sec_bat_update_info(info);
 	sec_bat_check_vf(info);
+
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	sec_bat_check_fullcharged(info);
+#else
 	sec_check_chgcurrent(info);
+#endif
 
 #ifdef ADJUST_RCOMP_WITH_TEMPER
 	sec_fg_update_temper(info);
 #endif
+	pr_info("[battery] Inow(%d)\n", info->current_now);
 	pr_info("[battery] level(%d), vcell(%d), therm(%d)\n",
 		info->batt_soc, info->batt_vcell, info->batt_temp);
 	pr_info("[battery] cable_type(%d), chg_status(%d), health(%d)\n",
@@ -1699,6 +1876,10 @@ static void sec_bat_monitor_work(struct work_struct *work)
 	pr_info("[battery] timeout_chgstp(%d), chg_enabled(%d), rechg_status(%d)\n",
 		info->is_timeout_chgstop, info->charging_enabled,
 		info->recharging_status);
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	pr_info("[battery] charging_mode(%s), siop_level(%d)\n",
+		sec_bat_charging_mode_str[info->charging_mode], info->siop_level);
+#endif
 
 	if (sec_check_recharging(info)) {
 		pr_info("%s : rechg triggered!\n", __func__);
@@ -1720,6 +1901,9 @@ static void sec_bat_monitor_work(struct work_struct *work)
 		if (info->is_rechg_triggered &&
 		    info->recharging_status == false) {
 			info->recharging_status = true;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+			info->charging_mode = SEC_BATTERY_CHARGING_1ST;
+#endif
 			sec_bat_enable_charging(info, true);
 			info->is_rechg_triggered = false;
 
@@ -1983,6 +2167,10 @@ static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(batt_slate_mode),
 	SEC_BATTERY_ATTR(current_avg),
 	SEC_BATTERY_ATTR(factory_mode),
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	SEC_BATTERY_ATTR(siop_activated),
+	SEC_BATTERY_ATTR(siop_level),
+#endif
 };
 
 enum {
@@ -2035,6 +2223,10 @@ enum {
 	BATT_SLATE_MODE,
 	BATT_CURR_AVG,
 	BATT_FACTORY,
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	SIOP_ACTIVATED,
+	SIOP_LEVEL,
+#endif
 };
 
 #if defined(CONFIG_BATTERY_CTIA)
@@ -2054,7 +2246,7 @@ static void sec_bat_use_timer_func(struct alarm *alarm)
 	struct sec_bat_info *info =
 		container_of(alarm, struct sec_bat_info, event_alarm);
 	info->batt_use &= (~info->batt_use_wait);
-	pr_err("/BATT_USE/ timer expired (0x%x)\n", info->batt_use);
+	pr_info("/BATT_USE/ timer expired (0x%x)\n", info->batt_use);
 }
 
 static void sec_bat_use_module(struct sec_bat_info *info,
@@ -2078,26 +2270,26 @@ static void sec_bat_use_module(struct sec_bat_info *info,
 
 		/* debug msg */
 		if (module == USE_CALL)
-			pr_err("/BATT_USE/ call 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ call 0x%x\n", info->batt_use);
 		else if (module == USE_VIDEO)
-			pr_err("/BATT_USE/ video 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ video 0x%x\n", info->batt_use);
 		else if (module == USE_MUSIC)
-			pr_err("/BATT_USE/ music 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ music 0x%x\n", info->batt_use);
 		else if (module == USE_BROWSER)
-			pr_err("/BATT_USE/ browser 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ browser 0x%x\n", info->batt_use);
 		else if (module == USE_HOTSPOT)
-			pr_err("/BATT_USE/ hotspot 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ hotspot 0x%x\n", info->batt_use);
 		else if (module == USE_CAMERA)
-			pr_err("/BATT_USE/ camera 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ camera 0x%x\n", info->batt_use);
 		else if (module == USE_DATA_CALL)
-			pr_err("/BATT_USE/ datacall 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ datacall 0x%x\n", info->batt_use);
 		else if (module == USE_LTE)
-			pr_err("/BATT_USE/ lte 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ lte 0x%x\n", info->batt_use);
 		else if (module == USE_WIFI)
-			pr_err("/BATT_USE/ wifi 0x%x\n", info->batt_use);
+			pr_info("/BATT_USE/ wifi 0x%x\n", info->batt_use);
 	} else {
 		if (info->batt_use == 0) {
-			pr_err("/BATT_USE/ nothing to clear\n");
+			pr_info("/BATT_USE/ nothing to clear\n");
 			return;	/* nothing to clear */
 		}
 		info->batt_use_wait = module;
@@ -2323,6 +2515,14 @@ static ssize_t sec_bat_show_property(struct device *dev,
 		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
 				   info->current_avg);
 		break;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	case SIOP_ACTIVATED:
+		break;
+	case SIOP_LEVEL:
+		i += scnprintf(buf + i, PAGE_SIZE - i, "%d\n",
+					info->siop_level);
+		break;
+#endif
 	default:
 		i = -EINVAL;
 	}
@@ -2560,6 +2760,28 @@ static ssize_t sec_bat_store(struct device *dev,
 		}
 		pr_info("[battery]:%s: factory mode = %d\n", __func__, x);
 		break;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	case SIOP_ACTIVATED:
+		break;
+	case SIOP_LEVEL:
+		if (sscanf(buf, "%d\n", &x) == 1) {
+			union power_supply_propval value;
+			struct power_supply *psy = power_supply_get_by_name(info->charger_name);
+
+			pr_info("[battery]:%s: siop level: %d\n", __func__, x);
+			if (x >= 0 && x <= 100)
+				info->siop_level = x;
+			else
+				info->siop_level = 100;
+			value.intval = info->siop_level;
+
+			psy->set_property(psy,
+				POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, &value);
+
+			ret = count;
+		}
+		break;
+#endif
 	default:
 		ret = -EINVAL;
 	}
@@ -2752,6 +2974,12 @@ static __devinit int sec_bat_probe(struct platform_device *pdev)
 #ifdef CONFIG_WIRELESS_CHARGING
 	info->wpc_charging_current = pdata->wpc_charging_current;
 #endif /*CONFIG_WIRELESS_CHARGING*/
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	info->siop_level = 100;
+	info->charging_fullcharged_2nd_duration = 40 * 60;
+	info->charging_fullcharged_time = 0;
+	info->charging_mode = SEC_BATTERY_CHARGING_NONE;
+#endif
 
 	if (poweroff_charging)
 		info->lpm_chg_mode = true;
@@ -2927,6 +3155,8 @@ static __devinit int sec_bat_probe(struct platform_device *pdev)
 
 	queue_delayed_work(info->monitor_wqueue, &info->measure_work, 0);
 	queue_work(info->monitor_wqueue, &info->monitor_work);
+
+	pr_info("%s: SEC Battery Driver probe SUCCESS !\n", __func__);
 
 	return 0;
 

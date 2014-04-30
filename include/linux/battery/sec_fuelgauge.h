@@ -37,23 +37,6 @@ struct sec_fuelgauge_reg_data {
 	u8 reg_data2;
 };
 
-#if !defined (CONFIG_MACH_COMANCHE) &&  !defined (CONFIG_MACH_ESPRESSO10_ATT) && !defined (CONFIG_MACH_APEXQ)\
-	&& !defined (CONFIG_MACH_ESPRESSO10_SPR) && !defined (CONFIG_MACH_ESPRESSO10_VZW)  && !defined (CONFIG_MACH_EXPRESS)\
-	&& !defined (CONFIG_MACH_ESPRESSO_VZW)
-
-static enum power_supply_property sec_fuelgauge_props[] = {
-	POWER_SUPPLY_PROP_STATUS,
-	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_VOLTAGE_AVG,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_CURRENT_AVG,
-	POWER_SUPPLY_PROP_CHARGE_FULL,
-	POWER_SUPPLY_PROP_ENERGY_NOW,
-	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_TEMP,
-	POWER_SUPPLY_PROP_TEMP_AMBIENT,
-};
-#endif
 struct sec_fuelgauge_info {
 	struct i2c_client		*client;
 	sec_battery_platform_data_t *pdata;
@@ -62,7 +45,8 @@ struct sec_fuelgauge_info {
 
 	int cable_type;
 	bool is_charging;
-
+	/* 0: normal mode, 1: quick start mode */
+	bool is_reset;
 	/* HW-dedicated fuel guage info structure
 	 * used in individual fuel gauge file only
 	 * (ex. dummy_fuelgauge.c)
@@ -119,15 +103,6 @@ ssize_t sec_fg_store_attrs(struct device *dev,
 	.store = sec_fg_store_attrs,			\
 }
 
-#if !defined (CONFIG_MACH_COMANCHE) &&  !defined (CONFIG_MACH_ESPRESSO10_ATT) && !defined (CONFIG_MACH_APEXQ)\
-	&& !defined (CONFIG_MACH_ESPRESSO10_SPR) && !defined (CONFIG_MACH_ESPRESSO10_VZW)  && !defined (CONFIG_MACH_EXPRESS)\
-	&& !defined (CONFIG_MACH_ESPRESSO_VZW)
-static struct device_attribute sec_fg_attrs[] = {
-	SEC_FG_ATTR(reg),
-	SEC_FG_ATTR(data),
-	SEC_FG_ATTR(regs),
-};
-#endif
 enum {
 	FG_REG = 0,
 	FG_DATA,

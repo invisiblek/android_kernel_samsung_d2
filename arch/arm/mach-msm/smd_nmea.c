@@ -195,8 +195,6 @@ static int __init nmea_init(void)
 		return -ENOMEM;
 
 	ret = misc_register(&nmea_device.misc);
-	if (ret)
-		destroy_workqueue(nmea_wq);
 	return ret;
 }
 

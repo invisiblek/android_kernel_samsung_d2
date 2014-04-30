@@ -30,7 +30,7 @@
 #define _TSPDRV_H
 #define VIBE_DEBUG
 #include <mach/msm_iomap.h>
-#include <mach/msm8960-gpio.h>
+
 #include <linux/mfd/pm8xxx/pm8921.h>
 
 #define PM8921_GPIO_BASE  NR_GPIO_IRQS
@@ -42,6 +42,8 @@ extern struct vibrator_platform_data vibrator_drvdata;
 #define MODULE_NAME                         "tspdrv"
 #define TSPDRV                              "/dev/"MODULE_NAME
 #define TSPDRV_MAGIC_NUMBER                 0x494D4D52
+#define TSPDRV_IOCTL_GROUP                  0x52
+#define TSPDRV_SET_MAGIC_NUMBER             _IO(TSPDRV_IOCTL_GROUP, 2)
 #define TSPDRV_STOP_KERNEL_TIMER            _IO(TSPDRV_MAGIC_NUMBER & 0xFF, 1)
 /*
 ** Obsolete IOCTL command
@@ -86,30 +88,13 @@ typedef struct {
 #define VIBRATION_ON            1
 #define VIBRATION_OFF           0
 
-/* GPIO definitions */
-#define VIB_PWM			70
-#define HAPTIC_PWR_EN		47
-#if defined(CONFIG_MACH_M2_DCM)
-#define	VIB_EN			65
-#else
-#define VIB_EN			77
-#endif
-#define PMIC_GPIO_VIB_ON	4
-
 int32_t g_nforce_32;
 
 #define GP_CLK_M_DEFAULT			1
 
-
-#if defined(CONFIG_MACH_JAGUAR)
-#define GP_CLK_N_DEFAULT			211/*About 177hz*/
-#elif defined(CONFIG_MACH_AEGIS2)
-#define GP_CLK_N_DEFAULT			184/*About 204 Hz*/
-#else
-#define GP_CLK_N_DEFAULT			183/*About 205 Hz*/
-#endif
-#define GP_CLK_D_DEFAULT			91/* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER		    181/* Must be integer */
+#define GP_CLK_N_DEFAULT			172
+#define GP_CLK_D_DEFAULT			86  /* 50% duty cycle */
+#define IMM_PWM_MULTIPLIER			172 /* Must be integer */
 
 /*
  * ** Global variables for LRA PWM M,N and D values.
@@ -143,8 +128,8 @@ int32_t g_nlra_gp_clk_pwm_mul = IMM_PWM_MULTIPLIER;
 	((current_reg_content & (unsigned int)(~(mask))) \
 	| ((unsigned int)((val) & (mask)))))
 
-#define HWIO_GP_MD_REG_ADDR		(MSM_CLK_CTL_BASE + 0x00002D00 + 32)
-#define HWIO_GP_MD_REG_PHYS		(MSM_CLK_CTL_PHYS + 0x00002D00 + 32)
+#define HWIO_GP_MD_REG_ADDR		(MSM_CLK_CTL_BASE + 0x00002D00 + 32*2)
+#define HWIO_GP_MD_REG_PHYS		(MSM_CLK_CTL_PHYS + 0x00002D00 + 32*2)
 #define HWIO_GP_MD_REG_RMSK		0xffffffff
 #define HWIO_GP_MD_REG_SHFT		0
 #define HWIO_GP_MD_REG_IN		\
@@ -161,8 +146,8 @@ int32_t g_nlra_gp_clk_pwm_mul = IMM_PWM_MULTIPLIER;
 #define HWIO_GP_MD_REG_D_VAL_BMSK		0x00ff
 #define HWIO_GP_MD_REG_D_VAL_SHFT		0
 
-#define HWIO_GP_NS_REG_ADDR	(MSM_CLK_CTL_BASE + 0x00002D24 + 32)
-#define HWIO_GP_NS_REG_PHYS	(MSM_CLK_CTL_PHYS + 0x00002D24 + 32)
+#define HWIO_GP_NS_REG_ADDR	(MSM_CLK_CTL_BASE + 0x00002D24 + 32*2)
+#define HWIO_GP_NS_REG_PHYS	(MSM_CLK_CTL_PHYS + 0x00002D24 + 32*2)
 #define HWIO_GP_NS_REG_RMSK		0xffffffff
 #define HWIO_GP_NS_REG_SHFT		0
 #define HWIO_GP_NS_REG_IN		\
@@ -221,4 +206,3 @@ extern void max77693_vibtonz_en(bool en);
 #endif
 
 #endif  /* _TSPDRV_H */
-

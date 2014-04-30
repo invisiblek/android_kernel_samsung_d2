@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,15 +29,15 @@ struct reg_struct {
 	uint16_t row_speed;             /*  0x3016 */
 	uint16_t x_addr_start;          /*  0x3004 */
 	uint16_t x_addr_end;            /*  0x3008 */
-	uint16_t y_addr_start;        	/*  0x3002 */
+	uint16_t y_addr_start;		/*  0x3002 */
 	uint16_t y_addr_end;            /*  0x3006 */
 	uint16_t read_mode;             /*  0x3040 */
 	uint16_t x_output_size;         /*  0x034C */
 	uint16_t y_output_size;         /*  0x034E */
 	uint16_t line_length_pck;       /*  0x300C */
 	uint16_t frame_length_lines;	/*  0x300A */
-	uint16_t coarse_int_time; 		/*  0x3012 */
-	uint16_t fine_int_time;   		/*  0x3014 */
+	uint16_t coarse_int_time;		/*  0x3012 */
+	uint16_t fine_int_time;			/*  0x3014 */
 };
 
 struct mt9t013_i2c_reg_conf {

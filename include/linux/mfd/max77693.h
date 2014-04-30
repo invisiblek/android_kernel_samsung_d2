@@ -29,6 +29,10 @@
 #define __LINUX_MFD_MAX77693_H
 
 #include <linux/regulator/consumer.h>
+#include <linux/battery/sec_charger.h>
+#if defined (CONFIG_SEC_PRODUCT_8930)
+#include <linux/battery/charger/max77693_charger.h>
+#endif
 
 enum {
 	MAX77693_MUIC_DETACHED = 0,
@@ -53,7 +57,8 @@ struct max77693_charger_reg_data {
 struct max77693_charger_platform_data {
 	struct max77693_charger_reg_data *init_data;
 	int num_init_data;
-#ifdef CONFIG_BATTERY_WPC_CHARGER
+	sec_battery_platform_data_t *sec_battery;
+#if defined(CONFIG_WIRELESS_CHARGING) || defined(CONFIG_CHARGER_MAX77803)
 	int wpc_irq_gpio;
 	int vbus_irq_gpio;
 	bool wc_pwr_det;
@@ -66,6 +71,7 @@ struct max77693_charger_platform_data {
 #define MOTOR_EN			(1<<6)
 #define EXT_PWM				(0<<5)
 #define DIVIDER_128			(1<<1)
+#define DIVIDER_256			0x3
 
 struct max77693_haptic_platform_data {
 	u16 max_timeout;
@@ -93,6 +99,7 @@ struct max77693_platform_data {
 	/* IRQ */
 	int irq_base;
 	int irq_gpio;
+	int wc_irq_gpio;
 	int wakeup;
 	struct max77693_muic_data *muic;
 	struct max77693_regulator_data *regulators;
@@ -105,9 +112,8 @@ struct max77693_platform_data {
 	/* led (flash/torch) data */
 	struct max77693_led_platform_data *led_data;
 #endif
-#ifdef CONFIG_BATTERY_MAX77693_CHARGER
-	/* charger data */
-	struct max77693_charger_platform_data *charger_data;
+#if defined(CONFIG_CHARGER_MAX77XXX) || defined(CONFIG_CHARGER_MAX77693) || defined(CONFIG_MACH_MELIUS)
+	sec_battery_platform_data_t *charger_data;
 #endif
 };
 
@@ -118,16 +124,29 @@ struct max77693_muic_data {
 	int (*charger_cb) (enum cable_type_muic);
 	void (*deskdock_cb) (bool attached);
 	void (*cardock_cb) (bool attached);
+#if defined(CONFIG_MACH_MELIUS)
+	void (*smartdock_cb) (bool attached, u8 cable_type);
+#else 
+	void (*smartdock_cb) (bool attached);
+#endif
+	void (*audiodock_cb) (bool attached);
 	void (*mhl_cb) (int attached);
 	void (*init_cb) (void);
 	int (*set_safeout) (int path);
 	 bool(*is_mhl_attached) (void);
 	int (*cfg_uart_gpio) (void);
 	void (*jig_uart_cb) (int path);
+#if defined(CONFIG_MUIC_DET_JACK)
+	void (*earjack_cb) (int attached);
+	void (*earjackkey_cb) (int pressed, unsigned int code);
+#endif
 	int (*host_notify_cb) (int enable);
 	int gpio_usb_sel;
 	int sw_path;
-
+	int uart_path;
+#ifdef CONFIG_VIDEO_MHL_V2
+	struct wake_lock mhl_wake_lock;
+#endif
 	void (*jig_state) (int jig_state);
 
 };
@@ -137,5 +156,7 @@ struct max77693_muic_data {
 extern struct max77693_muic_data max77693_muic;
 extern struct max77693_regulator_data max77693_regulators[];
 #endif
-
+#ifdef CONFIG_VIDEO_MHL_V2
+int acc_register_notifier(struct notifier_block *nb);
+#endif
 #endif				/* __LINUX_MFD_MAX77693_H */

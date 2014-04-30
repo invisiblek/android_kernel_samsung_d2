@@ -33,7 +33,6 @@
 #include <mach/gpio.h>
 #include <linux/sec_param.h>
 #include <mach/sec_debug.h>
-
 #define MOVINAND_CHECKSUM
 #define RORY_CONTROL
 
@@ -150,17 +149,17 @@ static unsigned int convert_debug_level_str(const char *str)
 static void convert_debug_level_int(unsigned int val, char *str)
 {
 	if (val == KERNEL_SEC_DEBUG_LEVEL_LOW) {
-		strncpy(str, "0xA0A0", sizeof("0xA0A0"));
+		strlcpy(str, "0xA0A0", sizeof("0xA0A0") + 1);
 		return;
 	}
 
 	if (val == KERNEL_SEC_DEBUG_LEVEL_MID) {
-		strncpy(str, "0xB0B0", sizeof("0xB0B0"));
+		strlcpy(str, "0xB0B0", sizeof("0xB0B0") + 1);
 		return;
 	}
 
 	if (val == KERNEL_SEC_DEBUG_LEVEL_HIGH) {
-		strncpy(str, "0xC0C0", sizeof("0xC0C0"));
+		strlcpy(str, "0xC0C0", sizeof("0xC0C0") + 1);
 		return;
 	}
 }
@@ -218,7 +217,6 @@ static DEVICE_ATTR(slideCount, S_IRUGO | S_IWUSR | S_IWGRP,\
 			slideCount_show, slideCount_store);
 #endif
 
-extern struct class *sec_class;
 struct device *sec_misc_dev;
 
 static struct device_attribute *sec_misc_attrs[] = {

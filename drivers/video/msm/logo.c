@@ -23,11 +23,6 @@
 
 #include <linux/irq.h>
 #include <asm/system.h>
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT) \
-	|| defined(CONFIG_FB_MSM_MIPI_NOVATEK_BOE_CMD_WVGA_PT) \
-	|| defined(CONFIG_FB_MSM_MIPI_NOVATEK_CMD_WVGA_PT)
-#include <asm/cacheflush.h>
-#endif
 
 #define fb_width(fb)	((fb)->var.xres)
 #define fb_height(fb)	((fb)->var.yres)
@@ -41,8 +36,6 @@ static void memset16(void *_ptr, unsigned short val, unsigned count)
 		*ptr++ = val;
 }
 
-
-/* convert RGB565 to RBG8888 */
 static int total_pixel = 1;
 static int memset16_rgb8888(void *_ptr, unsigned short val, unsigned count,
 				struct fb_info *fb)
@@ -54,29 +47,23 @@ static int memset16_rgb8888(void *_ptr, unsigned short val, unsigned count,
 	int need_align = (fb->fix.line_length >> 2) - fb->var.xres;
 	int align_amount = need_align << 1;
 	int pad = 0;
-
 	red = (val & 0xF800) >> 8;
 	green = (val & 0x7E0) >> 3;
 	blue = (val & 0x1F) << 3;
-
 	count >>= 1;
 	while (count--) {
 		*ptr++ = (green << 8) | red;
 		*ptr++ = blue;
-
 		if (need_align) {
 			if (!(total_pixel % fb->var.xres)) {
 				ptr += align_amount;
 				pad++;
 			}
 		}
-
 		total_pixel++;
 	}
-
 	return pad * align_amount;
 }
-
 /* 565RLE image format: [count(2 bytes), rle(2 bytes)] */
 int load_565rle_image(char *filename, bool bf_supported)
 {
@@ -94,13 +81,13 @@ int load_565rle_image(char *filename, bool bf_supported)
 		skip_logo = 1;
 		return 0;
 	}
+
 	info = registered_fb[0];
 	if (!info) {
 		printk(KERN_WARNING "%s: Can not access framebuffer\n",
 			__func__);
 		return -ENODEV;
 	}
-
 #ifndef CONFIG_FRAMEBUFFER_CONSOLE
 	owner = info->fbops->owner;
 	if (!try_module_get(owner))
@@ -142,8 +129,8 @@ int load_565rle_image(char *filename, bool bf_supported)
 		       __func__, __LINE__, info->node);
 		goto err_logo_free_data;
 	}
-	bits = (unsigned short *)(info->screen_base);
 	if (info->screen_base) {
+		bits = (unsigned short *)(info->screen_base);
 		while (count > 3) {
 			unsigned n = ptr[0];
 			if (n > max)
@@ -161,28 +148,19 @@ int load_565rle_image(char *filename, bool bf_supported)
 			count -= 4;
 		}
 	}
-
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT) \
-	|| defined(CONFIG_FB_MSM_MIPI_NOVATEK_BOE_CMD_WVGA_PT) \
-	|| defined(CONFIG_FB_MSM_MIPI_NOVATEK_CMD_WVGA_PT)
-	flush_cache_all();
-	outer_flush_all();
+#ifndef CONFIG_FRAMEBUFFER_CONSOLE
+	err = fb_pan_display(info, &info->var);
+	if (err < 0) {
+		printk(KERN_WARNING "%s: Can not update framebuffer\n",
+		__func__);
+		return -ENODEV;
+	}
 #endif
 
 err_logo_free_data:
 	kfree(data);
 err_logo_close_file:
 	sys_close(fd);
-
-#ifndef CONFIG_FRAMEBUFFER_CONSOLE
-	err = fb_pan_display(info, &info->var);
-	if (err < 0) {
-		printk(KERN_WARNING "%s: Can not update framebuffer\n",
-			__func__);
-		return -ENODEV;
-	}
-#endif
-
 	return err;
 }
 EXPORT_SYMBOL(load_565rle_image);
@@ -242,3 +220,4 @@ int draw_rgb888_screen(void)
 	return 0;
 }
 EXPORT_SYMBOL(draw_rgb888_screen);
+

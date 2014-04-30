@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,7 +10,11 @@
  * GNU General Public License for more details.
  *
  */
+
+#define pr_fmt(fmt) "AXI: %s(): " fmt, __func__
+
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
@@ -381,11 +385,11 @@ static int msm_bus_dbg_fill_cl_buffer(const struct msm_bus_scale_pdata *pdata,
 			pdata->usecase[index].vectors[j].dst);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\nab     : ");
 	for (j = 0; j < pdata->usecase->num_paths; j++)
-		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%u  ",
+		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%llu  ",
 			pdata->usecase[index].vectors[j].ab);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\nib     : ");
 	for (j = 0; j < pdata->usecase->num_paths; j++)
-		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%u  ",
+		i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "%llu  ",
 			pdata->usecase[index].vectors[j].ib);
 	i += scnprintf(buf + i, MAX_BUFF_SIZE - i, "\n");
 
@@ -624,19 +628,19 @@ static int __init msm_bus_debugfs_init(void)
 	}
 
 	clients = debugfs_create_dir("client-data", dir);
-	if ((!clients) || IS_ERR(clients)) {
+	if ((!dir) || IS_ERR(dir)) {
 		MSM_BUS_ERR("Couldn't create clients\n");
 		goto err;
 	}
 
 	shell_client = debugfs_create_dir("shell-client", dir);
-	if ((!shell_client) || IS_ERR(shell_client)) {
+	if ((!dir) || IS_ERR(dir)) {
 		MSM_BUS_ERR("Couldn't create clients\n");
 		goto err;
 	}
 
 	commit = debugfs_create_dir("commit-data", dir);
-	if ((!commit) || IS_ERR(commit)) {
+	if ((!dir) || IS_ERR(dir)) {
 		MSM_BUS_ERR("Couldn't create commit\n");
 		goto err;
 	}

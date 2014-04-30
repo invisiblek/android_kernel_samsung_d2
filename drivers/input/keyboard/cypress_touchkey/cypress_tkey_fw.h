@@ -9,25 +9,17 @@
  *
  */
 
-#if defined(CONFIG_MACH_GOGH)
-#define BIN_FW_VERSION		0x03
-#ifdef _CYPRESS_TKEY_FW_H
-#include "gogh_tkey_fw.h"
-#endif
-#elif defined(CONFIG_MACH_APEXQ)
+#if defined(CONFIG_MACH_SERRANO)
+#if defined(CONFIG_MACH_SERRANO_VZW)  || defined(CONFIG_MACH_SERRANO_USC) || defined(CONFIG_MACH_SERRANO_LRA)
 #define BIN_FW_VERSION		0x01
 #ifdef _CYPRESS_TKEY_FW_H
-#include "apexq_tkey_fw.h"
+#include "serrano_vzw_tkey_fw.h"
 #endif
-#elif defined(CONFIG_MACH_AEGIS2)
-#define BIN_FW_VERSION          0x10
+#else
+#define BIN_FW_VERSION		0x03
 #ifdef _CYPRESS_TKEY_FW_H
-#include "aegis2_tkey_fw.h"
+#include "serrano_tkey_fw.h"
 #endif
-#elif defined(CONFIG_MACH_EXPRESS)
-#define BIN_FW_VERSION          0x09
-#ifdef _CYPRESS_TKEY_FW_H
-#include "express_tkey_fw.h"
 #endif
 #else
 #define BIN_FW_VERSION		0x00
@@ -35,3 +27,5 @@
 unsigned char firmware_data[8192];
 #endif
 #endif
+#define BIN_FW_VERSION_NEXT	0x0B
+

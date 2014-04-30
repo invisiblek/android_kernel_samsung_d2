@@ -116,7 +116,11 @@ struct ensemble_info_type {
 #define DMB_FIC_RESULT_DONE	0x01
 #define DMB_TS_PACKET_RESYNC	0x02
 
+#if defined(CONFIG_TDMB_EBI)
+int tdmb_init_bus(unsigned long addr, int size);
+#else
 int tdmb_init_bus(void);
+#endif
 void tdmb_exit_bus(void);
 irqreturn_t tdmb_irq_handler(int irq, void *dev_id);
 unsigned long tdmb_get_chinfo(void);
@@ -175,7 +179,7 @@ struct spi_device *tdmb_get_spi_handle(void);
 #endif
 
 #ifdef CONFIG_BATTERY_SEC
-extern int poweroff_charging;
+extern unsigned int is_lpcharging_state(void);
 #endif
 
 #endif

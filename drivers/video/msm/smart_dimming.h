@@ -106,7 +106,7 @@ struct str_smart_dim {
 };
 
 int init_table_info(struct str_smart_dim *smart, unsigned char *srcGammaTable);
-u8 calc_voltage_table(struct str_smart_dim *smart, const u8 * mtp);
+u8 calc_voltage_table(struct str_smart_dim *smart, const u8 *mtp);
 u32 calc_gamma_table(struct str_smart_dim *smart, u32 gv, u8 result[]);
 
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,8 @@ struct pm8xxx_mpp_core_data {
 struct pm8xxx_mpp_platform_data {
 	struct pm8xxx_mpp_core_data	core_data;
 	int				mpp_base;
+	int				*dbg_mpps;
+	int				dbg_mpp_len;
 };
 
 /**
@@ -118,6 +120,7 @@ struct pm8xxx_mpp_config_data {
  */
 int pm8xxx_mpp_config(unsigned mpp, struct pm8xxx_mpp_config_data *config);
 
+void pm_mpp_dbg_showall(unsigned int level);
 #else
 
 static inline int pm8xxx_mpp_config(unsigned mpp,
@@ -126,6 +129,7 @@ static inline int pm8xxx_mpp_config(unsigned mpp,
 	return -ENXIO;
 }
 
+static inline void pm_mpp_dbg_showall(unsigned int level) {}
 #endif
 
 /* MPP Type: type */
@@ -168,7 +172,7 @@ static inline int pm8xxx_mpp_config(unsigned mpp,
 #define	PM8921_MPP_DIG_LEVEL_VPH	7
 
 /* Digital Input/Output: level [PM8821] */
-#define	PM8821_MPP_DIG_LEVEL_1P8	1
+#define	PM8821_MPP_DIG_LEVEL_1P8	0
 #define	PM8821_MPP_DIG_LEVEL_VPH	7
 
 /* Digital Input/Output: level [PM8018] */

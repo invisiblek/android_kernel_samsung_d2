@@ -58,8 +58,8 @@ void tchal_reset_device(void)
 	/* select peripheral mode as SPI */
 #if defined(__USE_DXB1_IRQ__)
 	BITCLR(RGPIO->GPAFN1, Hw16 - Hw12); /* DXB1_IRQ Set GPIO mode*/
-	BITSET(RGPIO->GPAEN,  Hw11); /* DXB1_IRQ output mode*/
-	BITCLR(RGPIO->GPADAT, Hw11); /* DXB1_IRQ clear*/
+	BITSET(RGPIO->GPAEN,  Hw11);		/* DXB1_IRQ output mode*/
+	BITCLR(RGPIO->GPADAT, Hw11);		/* DXB1_IRQ clear*/
 #elif defined(__USE_DXB0_IRQ__)
 	BITCLR(RGPIO->GPDFN1, Hw8 - Hw4);  /* DXB0_IRQ Set GPIO mode*/
 	BITSET(RGPIO->GPDEN,  Hw9); /* DXB0_IRQ output mode*/
@@ -70,10 +70,10 @@ void tchal_reset_device(void)
 	/* reset */
 #if defined(__CSPI_ONLY__)
 	BITCLR(RGPIO->GPEFN1, Hw16 - Hw12); /* DXB1_RST# Set GPIO mode */
-	BITSET(RGPIO->GPEEN,  Hw11); /* DXB1_RST# Set GPIO Output mode*/
-	BITCLR(RGPIO->GPEDAT, Hw11); /* DXB1_RST# Clear */
+	BITSET(RGPIO->GPEEN,  Hw11);/* DXB1_RST# Set GPIO Output mode*/
+	BITCLR(RGPIO->GPEDAT, Hw11);/* DXB1_RST# Clear */
 	tcpal_msleep(10);
-	BITSET(RGPIO->GPEDAT, Hw11); /* DXB1_RST# Set*/
+	BITSET(RGPIO->GPEDAT, Hw11);/* DXB1_RST# Set*/
 #elif defined(__I2C_STS__)
 	BITCLR(RGPIO->GPDFN1, Hw4 - Hw0); /* DXB0_RST# Set GPIO mode */
 	BITSET(RGPIO->GPDEN,  Hw8); /* DXB0_RST# Set GPIO Output mode*/
@@ -125,8 +125,8 @@ void tchal_irq_setup(void)
 {
 #ifdef __USE_TC_CPU__
 #if defined(__USE_DXB1_IRQ__)
-	BITCLR(RGPIO->GPAFN1, Hw16 - Hw12); /* DXB1_IRQ Set GPIO mode*/
-	BITCLR(RGPIO->GPAEN, Hw11);         /* DXB1_IRQ input mode*/
+	BITCLR(RGPIO->GPAFN1, Hw16 - Hw12);/* DXB1_IRQ Set GPIO mode*/
+	BITCLR(RGPIO->GPAEN,  Hw11);/* DXB1_IRQ input mode*/
 
 	BITCSET(RGPIO->EINTSEL0, Hw32 - Hw24, 11<<24); /*GPIO_A11*/
 #elif defined(__USE_DXB0_IRQ__)

@@ -32,7 +32,7 @@
 #include <linux/device.h>
 #include <linux/ir_remote_con.h>
 #include <linux/earlysuspend.h>
-#include "espresso_irda_fw.h"
+#include "irda_fw.h"
 
 #define MAX_SIZE 2048
 #define MC96_READ_LENGTH	8
@@ -62,13 +62,13 @@ static int irda_fw_update(struct ir_remocon_data *ir_data)
 {
 	struct ir_remocon_data *data = ir_data;
 	struct i2c_client *client = data->client;
-	int i=0, ret=0;
+	int i = 0, ret = 0;
 	u8 buf_ir_test[8];
 
 	data->pdata->ir_vdd_onoff(0);
 	data->pdata->ir_wake_en(1);
 	data->pdata->ir_vdd_onoff(1);
-	msleep(100);
+	msleep(1000);
 
 	ret = i2c_master_recv(client, buf_ir_test, MC96_READ_LENGTH);
 	if (ret < 0) {

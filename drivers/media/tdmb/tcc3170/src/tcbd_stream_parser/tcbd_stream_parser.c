@@ -210,11 +210,11 @@ static void tcbd_merge_each_stream(struct tcbd_split_stream_data *_parser,
 		}
 		if (_parser->quick_msc_idx[header->subch] == 0xFF)
 			_parser->quick_msc_idx[header->subch] =
-							_parser->num_subch++;
+				_parser->num_subch++;
 
 		quick_msc_idx = _parser->quick_msc_idx[header->subch];
 		if (quick_msc_idx >= TCBD_MAX_NUM_SERVICE)
-			tcbd_debug(DEBUG_ERROR, "quick_msc_idx:%d, header->"
+			tcbd_debug(DEBUG_ERROR, "quick_msc_idx:%d, header->"\
 				"subch:%d\n", quick_msc_idx, header->subch);
 
 		merged = &_parser->merged_msc[quick_msc_idx];
@@ -239,11 +239,11 @@ static void tcbd_merge_each_stream(struct tcbd_split_stream_data *_parser,
 		return;
 	}
 
-	tcbd_debug(DEBUG_STREAM_STACK, "type:%d, subchid:%u, buffer:%p "
+	tcbd_debug(DEBUG_STREAM_STACK, "type:%d, subchid:%u, buffer:%p "\
 			"currpos:%d, size:%d\n", header->type, header->subch,
 			merged->buffer, merged->curr_pos, header->data_size);
 	memcpy(merged->buffer + merged->curr_pos, chunk_buff,
-						header->data_size);
+			header->data_size);
 	merged->curr_pos += header->data_size;
 }
 
@@ -288,7 +288,7 @@ static s32 tcbd_push_merged_stream(struct tcbd_split_stream_data *_parser)
 	}
 	return 0;
 }
-#endif /* __MERGE_EACH_TYPEOF_STREAM__ */
+#endif /*__MERGE_EACH_TYPEOF_STREAM__ */
 
 static void tcbd_stack_chunk(struct tcbd_split_stream_data *_parser,
 							u8 *_buffer)
@@ -331,7 +331,7 @@ static inline s32 tcbd_push_concat(struct tcbd_split_stream_data *_parser,
 		memcpy(_cache_buff + pre_copied, buffer, _parser->remain);
 		_parser->next_read -= _parser->remain;
 		ret = _parser->remain;
-		tcbd_debug(DEBUG_PARSING_PROC, "keep %s data %d bytes, pre:%d,"
+		tcbd_debug(DEBUG_PARSING_PROC, "keep %s data %d bytes, pre:%d,"\
 				"next:%d, buffer:%p\n", type[header->type],
 				_parser->remain, pre_copied, _parser->next_read,
 				_cache_buff);
@@ -339,7 +339,7 @@ static inline s32 tcbd_push_concat(struct tcbd_split_stream_data *_parser,
 		memcpy(_cache_buff + pre_copied, buffer, _parser->next_read);
 		tcbd_stack_chunk(_parser, _cache_buff);
 		ret = _parser->next_read;
-		tcbd_debug(DEBUG_PARSING_PROC, "send %s data %d bytes, pre:%d,"
+		tcbd_debug(DEBUG_PARSING_PROC, "send %s data %d bytes, pre:%d,"\
 				"curr:%d, buffer:%p\n", type[header->type],
 				header->data_size, pre_copied,
 				_parser->next_read, _cache_buff);

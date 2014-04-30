@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -160,7 +160,10 @@ static ssize_t mdp_reg_write(
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	printk(KERN_INFO "%s: addr=%x data=%x\n", __func__, off, data);
-
+	{
+		void xlog_dump(void);
+		xlog_dump();
+	}
 	return count;
 }
 
@@ -387,10 +390,6 @@ static ssize_t mdp_stat_read(
 	dlen -= len;
 	len = snprintf(bp, dlen, "dmas: %08lu\n",
 					mdp4_stat.kickoff_dmas);
-	bp += len;
-	dlen -= len;
-	len = snprintf(bp, dlen, "mixer_reset: %08lu\n",
-					mdp4_stat.mixer_reset);
 
 	bp += len;
 	dlen -= len;
@@ -438,6 +437,7 @@ static ssize_t mdp_stat_read(
 	dlen -= len;
 	len = snprintf(bp, dlen, "play:  %08lu\t",
 					mdp4_stat.overlay_play[1]);
+
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "commit:  %08lu\n\n",
@@ -490,19 +490,19 @@ static ssize_t mdp_stat_read(
 	len = snprintf(bp, dlen, "err_mixer : %08lu\t", mdp4_stat.err_mixer);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "err_size : %08lu\n", mdp4_stat.err_size);
+	len = snprintf(bp, dlen, "err_size  : %08lu\n", mdp4_stat.err_size);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "err_scale: %08lu\t", mdp4_stat.err_scale);
+	len = snprintf(bp, dlen, "err_scale : %08lu\t", mdp4_stat.err_scale);
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "err_format: %08lu\n", mdp4_stat.err_format);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "err_play:  %08lu\t", mdp4_stat.err_play);
+	len = snprintf(bp, dlen, "err_play  : %08lu\t", mdp4_stat.err_play);
 	bp += len;
 	dlen -= len;
-	len = snprintf(bp, dlen, "err_stage: %08lu\n", mdp4_stat.err_stage);
+	len = snprintf(bp, dlen, "err_stage : %08lu\n", mdp4_stat.err_stage);
 	bp += len;
 	dlen -= len;
 	len = snprintf(bp, dlen, "err_underflow: %08lu\n\n",
@@ -623,8 +623,12 @@ static void mddi_reg_write(int ndx, uint32 off, uint32 data)
 	else
 		base = (char *)msm_pmdh_base;
 
-	if (base == NULL)
+	if (base == NULL) {
+		printk(KERN_INFO "%s: base offset is not set properly. \
+			Please check if MDDI enables correctly\n", __func__);
 		return;
+	}
+
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	writel(data, base + off);
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -648,8 +652,11 @@ static int mddi_reg_read(int ndx)
 	else
 		base = msm_pmdh_base;
 
-	if (base == NULL)
+	if (base == NULL) {
+		printk(KERN_INFO "%s: base offset is not set properly. \
+			Please check if MDDI enables correctly\n", __func__);
 		return -EFAULT;
+	}
 
 	reg = mddi_regs_list;
 	bp = debug_buf;
@@ -726,6 +733,84 @@ static const struct file_operations pmdh_fops = {
 	.read = pmdh_reg_read,
 	.write = pmdh_reg_write,
 };
+
+
+
+#if defined(CONFIG_FB_MSM_OVERLAY) && defined(CONFIG_FB_MSM_MDDI)
+static int vsync_reg_open(struct inode *inode, struct file *file)
+{
+	/* non-seekable */
+	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
+	return 0;
+}
+
+static int vsync_reg_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static ssize_t vsync_reg_write(
+	struct file *file,
+	const char __user *buff,
+	size_t count,
+	loff_t *ppos)
+{
+	uint32 enable;
+	int cnt;
+
+	if (count >= sizeof(debug_buf))
+		return -EFAULT;
+
+	if (copy_from_user(debug_buf, buff, count))
+		return -EFAULT;
+
+	debug_buf[count] = 0;	/* end of string */
+
+	cnt = sscanf(debug_buf, "%x", &enable);
+
+	mdp_dmap_vsync_set(enable);
+
+	return count;
+}
+
+static ssize_t vsync_reg_read(
+	struct file *file,
+	char __user *buff,
+	size_t count,
+	loff_t *ppos)
+{
+	char *bp;
+	int len = 0;
+	int tot = 0;
+	int dlen;
+
+	if (*ppos)
+		return 0;	/* the end */
+
+	bp = debug_buf;
+	dlen = sizeof(debug_buf);
+	len = snprintf(bp, dlen, "%x\n", mdp_dmap_vsync_get());
+	tot += len;
+	bp += len;
+	*bp = 0;
+	tot++;
+
+	if (copy_to_user(buff, debug_buf, tot))
+		return -EFAULT;
+
+	*ppos += tot;	/* increase offset */
+
+	return tot;
+}
+
+
+static const struct file_operations vsync_fops = {
+	.open = vsync_reg_open,
+	.release = vsync_reg_release,
+	.read = vsync_reg_read,
+	.write = vsync_reg_write,
+};
+#endif
 
 static ssize_t emdh_reg_write(
 	struct file *file,
@@ -1271,6 +1356,15 @@ int mdp_debugfs_init(void)
 			__FILE__, __LINE__);
 		return -1;
 	}
+
+#if defined(CONFIG_FB_MSM_OVERLAY) && defined(CONFIG_FB_MSM_MDDI)
+	if (debugfs_create_file("vsync", 0644, dent, 0, &vsync_fops)
+			== NULL) {
+		printk(KERN_ERR "%s(%d): debugfs_create_file: debug fail\n",
+			__FILE__, __LINE__);
+		return -1;
+	}
+#endif
 
 	dent = debugfs_create_dir("emdh", NULL);
 

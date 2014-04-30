@@ -130,7 +130,7 @@ static int msm_rpmstats_file_read(struct file *file, char __user *bufu,
 	if (!prvdata)
 		return -EINVAL;
 
-	if (!bufu)
+	if (!bufu || count < 0)
 		return -EINVAL;
 
 	if (!prvdata->num_records)

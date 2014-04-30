@@ -39,7 +39,7 @@ s32 tcbd_queue_is_empty(struct tcbd_queue *_queue)
 }
 
 void tcbd_init_queue(
-	struct tcbd_queue *_queue, u8* _buffer, s32 _buff_size)
+	struct tcbd_queue *_queue, u8 *_buffer, s32 _buff_size)
 {
 	memset((void *)_queue->q, 0,
 			sizeof(struct tcbd_queue_item) * TCBD_QUEUE_SIZE);
@@ -110,8 +110,8 @@ s32 tcbd_enqueue(
 	else
 		_queue->pointer += _size;
 	memcpy(_queue->q[_queue->rear].buffer, _chunk, _size);
-	_queue->q[_queue->rear].size   = _size;
-	_queue->q[_queue->rear].type   = _type;
+	_queue->q[_queue->rear].size = _size;
+	_queue->q[_queue->rear].type = _type;
 	_queue->q[_queue->rear].subch_id = _subch_id;
 
 	_queue->rear = (_queue->rear + 1) % _queue->qsize;

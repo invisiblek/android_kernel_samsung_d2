@@ -37,11 +37,11 @@
 #include <linux/io.h>
 #include <asm/mach-types.h>
 
-#define MAX_I2C_BURST 512
-#define Bit7 0x00000080
+#define MAX_I2C_BURST		512
+#define Bit7		  0x00000080
 
-#define I2C_BUS	 1
-#define I2C_ADDR (0xA0>>1)
+#define I2C_BUS				1
+#define I2C_ADDR	   (0xA0>>1)
 
 #if defined(__I2C_STS__)
 

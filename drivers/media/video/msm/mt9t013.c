@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,8 +27,8 @@
 /*=============================================================
 	SENSOR REGISTER DEFINES
 ==============================================================*/
-#define MT9T013_REG_MODEL_ID 		 0x0000
-#define MT9T013_MODEL_ID     		 0x2600
+#define MT9T013_REG_MODEL_ID		 0x0000
+#define MT9T013_MODEL_ID		 0x2600
 #define REG_GROUPED_PARAMETER_HOLD   0x0104
 #define GROUPED_PARAMETER_HOLD       0x0100
 #define GROUPED_PARAMETER_UPDATE     0x0000
@@ -114,8 +114,8 @@ struct mt9t013_ctrl {
 	const struct msm_camera_sensor_info *sensordata;
 
 	int sensormode;
-	uint32_t fps_divider; 		/* init to 1 * 0x00000400 */
-	uint32_t pict_fps_divider; 	/* init to 1 * 0x00000400 */
+	uint32_t fps_divider;		/* init to 1 * 0x00000400 */
+	uint32_t pict_fps_divider;	/* init to 1 * 0x00000400 */
 
 	uint16_t curr_lens_pos;
 	uint16_t init_curr_lens_pos;

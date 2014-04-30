@@ -27,7 +27,7 @@ void sec_getlog_supply_fbinfo(void *p_fb, u32 xres, u32 yres, u32 bpp,
 			      u32 frames)
 {
 	if (p_fb) {
-		pr_info("%s: 0x%p %d %d %d %d\n", __func__, p_fb, xres, yres,
+		pr_info("%s: 0x %p %d %d %d %d\n", __func__, p_fb, xres, yres,
 			bpp, frames);
 		frame_buf_mark.p_fb = p_fb;
 		frame_buf_mark.xres = xres;

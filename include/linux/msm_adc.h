@@ -236,6 +236,7 @@ enum hw_type {
 	MSM_7x30,
 	MSM_8x60,
 	FSM_9xxx,
+	MSM_8x25,
 };
 
 enum epm_gpio_config {

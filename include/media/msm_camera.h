@@ -196,7 +196,6 @@ struct ioctl_native_cmd {
 	unsigned short value_2;
 	unsigned short value_3;
 };
-
 #define MSM_CAM_IOCTL_PICT_PP_DIVERT_DONE \
 	_IOR(MSM_CAM_IOCTL_MAGIC, 47, struct msm_pp_frame *)
 
@@ -213,20 +212,46 @@ struct ioctl_native_cmd {
 	_IOW(MSM_CAM_IOCTL_MAGIC, 51, uint32_t *)
 
 #define MSM_CAM_IOCTL_GET_MCTL_INFO \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 52, struct msm_mctl_node_info *)
+	_IOR(MSM_CAM_IOCTL_MAGIC, 51, struct msm_mctl_node_info *)
 
 #define MSM_CAM_IOCTL_MCTL_DIVERT_DONE \
-	_IOR(MSM_CAM_IOCTL_MAGIC, 53, struct msm_cam_evt_divert_frame *)
-
-#define MSM_CAM_IOCTL_V4L2_EVT_NATIVE_CMD \
-	_IOWR(MSM_CAM_IOCTL_MAGIC, 54, struct ioctl_native_cmd *)
-
-#define MSM_CAM_IOCTL_V4L2_EVT_NATIVE_FRONT_CMD \
-	_IOWR(MSM_CAM_IOCTL_MAGIC, 55, struct ioctl_native_cmd *)
+	_IOR(MSM_CAM_IOCTL_MAGIC, 52, struct msm_cam_evt_divert_frame *)
 
 #define MCTL_CAM_IOCTL_SET_FOCUS \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 56, uint32_t)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 53, uint32_t)
 
+#define MSM_CAM_IOCTL_STATS_UNREG_BUF \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 61, struct msm_stats_flush_bufq *)
+
+#define MSM_CAM_IOCTL_CSIC_IO_CFG \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 62, struct csic_cfg_data *)
+
+#define MSM_CAM_IOCTL_CSID_IO_CFG \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 63, struct csid_cfg_data *)
+
+#define MSM_CAM_IOCTL_CSIPHY_IO_CFG \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 64, struct csiphy_cfg_data *)
+
+#define MSM_CAM_IOCTL_OEM \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 65, struct sensor_cfg_data *)
+
+#define MSM_CAM_IOCTL_AXI_INIT \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 66, uint8_t *)
+
+#define MSM_CAM_IOCTL_AXI_RELEASE \
+	_IO(MSM_CAM_IOCTL_MAGIC, 67)
+
+#define MSM_CAM_IOCTL_V4L2_EVT_NATIVE_CMD \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 68, struct msm_camera_v4l2_ioctl_t)
+
+#define MSM_CAM_IOCTL_V4L2_EVT_NATIVE_FRONT_CMD \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 69, struct msm_camera_v4l2_ioctl_t)
+
+#define MSM_CAM_IOCTL_AXI_LOW_POWER_MODE \
+	_IOWR(MSM_CAM_IOCTL_MAGIC, 70, uint8_t *)
+
+#define MSM_CAM_IOCTL_INTF_MCTL_MAPPING_CFG \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 71, struct intf_mctl_mapping_cfg *)
 struct msm_mctl_pp_cmd {
 	int32_t  id;
 	uint16_t length;
@@ -257,7 +282,6 @@ struct msm_mctl_post_proc_cmd {
 #define PP_PREV  ((0x01)<<2)
 #define PP_THUMB ((0x01)<<3)
 #define PP_MASK		(PP_SNAP|PP_RAW_SNAP|PP_PREV|PP_THUMB)
-
 #define MSM_CAM_CTRL_CMD_DONE  0
 #define MSM_CAM_SENSOR_VFE_CMD 1
 
@@ -436,11 +460,11 @@ struct msm_camera_cfg_cmd {
 #define CMD_STATS_AF_ENABLE		13
 #define CMD_STATS_AEC_ENABLE		14
 #define CMD_STATS_AWB_ENABLE		15
-#define CMD_STATS_ENABLE		16
+#define CMD_STATS_ENABLE  		16
 
 #define CMD_STATS_AXI_CFG		17
 #define CMD_STATS_AEC_AXI_CFG		18
-#define CMD_STATS_AF_AXI_CFG		19
+#define CMD_STATS_AF_AXI_CFG 		19
 #define CMD_STATS_AWB_AXI_CFG		20
 #define CMD_STATS_RS_AXI_CFG		21
 #define CMD_STATS_CS_AXI_CFG		22
@@ -1043,13 +1067,11 @@ struct msm_snapshot_pp_status {
 
 #define EXIF_SHUTTERSPEED	1
 #define EXIF_ISO		2
-
 #define CAMERA_EXPOSURE_COMPENSATION_LV0			12
 #define CAMERA_EXPOSURE_COMPENSATION_LV1			6
 #define CAMERA_EXPOSURE_COMPENSATION_LV2			0
 #define CAMERA_EXPOSURE_COMPENSATION_LV3			-6
 #define CAMERA_EXPOSURE_COMPENSATION_LV4			-12
-
 /* only for D2 : start*/
 enum msm_v4l2_AF_command {
 	MSM_V4L2_AF_SET_AUTO_FOCUS = 0,
@@ -1185,6 +1207,7 @@ struct sensor_pict_fps {
 };
 
 struct exp_gain_cfg {
+/*	uint16_t gain;*/
 	uint16_t gain;
 	uint32_t line;
 };
@@ -1213,7 +1236,7 @@ struct sensor_3d_exp_cfg {
 	uint16_t gb_gain;
 	uint16_t gain_adjust;
 };
-struct sensor_3d_cali_data_t {
+struct sensor_3d_cali_data_t{
 	unsigned char left_p_matrix[3][4][8];
 	unsigned char right_p_matrix[3][4][8];
 	unsigned char square_len[8];
@@ -1474,4 +1497,10 @@ struct img_plane_info {
 	uint8_t vpe_can_use;
 };
 
+struct msm_camera_v4l2_ioctl_t {
+	uint32_t id;
+	uint32_t len;
+	uint32_t trans_code;
+	void __user *ioctl_ptr;
+};
 #endif /* __LINUX_MSM_CAMERA_H */

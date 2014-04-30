@@ -32,7 +32,6 @@ static inline void memcpy_dir(void *buf, void *sgdata, size_t nbytes, int out)
 
 void scatterwalk_start(struct scatter_walk *walk, struct scatterlist *sg)
 {
-	BUG_ON(!sg);
 	walk->sg = sg;
 
 	BUG_ON(!sg->length);
@@ -41,9 +40,9 @@ void scatterwalk_start(struct scatter_walk *walk, struct scatterlist *sg)
 }
 EXPORT_SYMBOL_GPL(scatterwalk_start);
 
-void *scatterwalk_map(struct scatter_walk *walk, int out)
+void *scatterwalk_map(struct scatter_walk *walk)
 {
-	return crypto_kmap(scatterwalk_page(walk), out) +
+	return kmap_atomic(scatterwalk_page(walk)) +
 	       offset_in_page(walk->offset);
 }
 EXPORT_SYMBOL_GPL(scatterwalk_map);
@@ -84,9 +83,9 @@ void scatterwalk_copychunks(void *buf, struct scatter_walk *walk,
 		if (len_this_page > nbytes)
 			len_this_page = nbytes;
 
-		vaddr = scatterwalk_map(walk, out);
+		vaddr = scatterwalk_map(walk);
 		memcpy_dir(buf, vaddr, len_this_page, out);
-		scatterwalk_unmap(vaddr, out);
+		scatterwalk_unmap(vaddr);
 
 		scatterwalk_advance(walk, len_this_page);
 

@@ -118,6 +118,13 @@ extern void iwmmxt_task_switch(struct thread_info *);
 extern void vfp_sync_hwstate(struct thread_info *);
 extern void vfp_flush_hwstate(struct thread_info *);
 
+struct user_vfp;
+struct user_vfp_exc;
+
+extern int vfp_preserve_user_clear_hwstate(struct user_vfp __user *,
+					   struct user_vfp_exc __user *);
+extern int vfp_restore_user_hwstate(struct user_vfp __user *,
+				    struct user_vfp_exc __user *);
 #endif
 
 /*
@@ -144,10 +151,9 @@ extern void vfp_flush_hwstate(struct thread_info *);
 #define TIF_POLLING_NRFLAG	16
 #define TIF_USING_IWMMXT	17
 #define TIF_MEMDIE		18	/* is terminating due to OOM killer */
-#define TIF_FREEZE		19
 #define TIF_RESTORE_SIGMASK	20
 #define TIF_SECCOMP		21
-
+#define TIF_MM_RELEASED		22	/* task MM has been released */
 #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
 #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
@@ -155,7 +161,6 @@ extern void vfp_flush_hwstate(struct thread_info *);
 #define _TIF_SYSCALL_AUDIT	(1 << TIF_SYSCALL_AUDIT)
 #define _TIF_POLLING_NRFLAG	(1 << TIF_POLLING_NRFLAG)
 #define _TIF_USING_IWMMXT	(1 << TIF_USING_IWMMXT)
-#define _TIF_FREEZE		(1 << TIF_FREEZE)
 #define _TIF_RESTORE_SIGMASK	(1 << TIF_RESTORE_SIGMASK)
 #define _TIF_SECCOMP		(1 << TIF_SECCOMP)
 

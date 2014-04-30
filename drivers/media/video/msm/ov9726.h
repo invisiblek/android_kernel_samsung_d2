@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,4 +36,3 @@ enum ov9726_resolution_t {
 extern struct reg_struct_type ov9726_init_settings_array[];
 extern int32_t ov9726_array_length;
 #endif
-

@@ -7,22 +7,30 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
+#include <linux/module.h>
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/sec_param.h>
+#include <linux/file.h>
+#include <linux/syscalls.h>
 
 #define PARAM_RD	0
 #define PARAM_WR	1
 
+#ifdef CONFIG_RTC_AUTO_PWRON_PARAM
+#define SEC_PARAM_FILE_NAME	"/dev/block/mmcblk0p19"	/* parameter block */
+#define SEC_PARAM_FILE_SIZE	0x600000		/* 12288 * 512 */
+#define SEC_PARAM_FILE_OFFSET (SEC_PARAM_FILE_SIZE - 1048576) // 1048576 byte == 1 MB
+#else
 #define SEC_PARAM_FILE_NAME	"/dev/block/mmcblk0p10"	/* parameter block */
 #define SEC_PARAM_FILE_SIZE	0xA00000		/* 10MB */
 #define SEC_PARAM_FILE_OFFSET (SEC_PARAM_FILE_SIZE - 0x100000)
+#endif
 
 /* single global instance */
-sec_param_data *param_data;
+struct sec_param_data *param_data;
 
 static bool param_sec_operation(void *value, int offset,
 		int size, int direction)
@@ -74,10 +82,10 @@ bool sec_open_param(void)
 	if (param_data != NULL)
 		return true;
 
-	param_data = kmalloc(sizeof(sec_param_data), GFP_KERNEL);
+	param_data = kmalloc(sizeof(struct sec_param_data), GFP_KERNEL);
 
 	ret = param_sec_operation(param_data, offset,
-			sizeof(sec_param_data), PARAM_RD);
+			sizeof(struct sec_param_data), PARAM_RD);
 
 	if (!ret) {
 		kfree(param_data);
@@ -91,7 +99,7 @@ bool sec_open_param(void)
 }
 EXPORT_SYMBOL(sec_open_param);
 
-bool sec_get_param(sec_param_index index, void *value)
+bool sec_get_param(enum sec_param_index index, void *value)
 {
 	int ret = true;
 	ret = sec_open_param();
@@ -123,6 +131,22 @@ bool sec_get_param(sec_param_index index, void *value)
 				sizeof(unsigned int));
 		break;
 #endif
+#ifdef CONFIG_RTC_AUTO_PWRON_PARAM
+	case param_index_boot_alarm_set:
+		memcpy(value, &(param_data->boot_alarm_set), sizeof(unsigned int));
+		break;
+	case param_index_boot_alarm_value_l:
+		memcpy(value, &(param_data->boot_alarm_value_l), sizeof(unsigned int));
+		break;
+	case param_index_boot_alarm_value_h:
+		memcpy(value, &(param_data->boot_alarm_value_h), sizeof(unsigned int));
+		break;
+#endif
+#ifdef CONFIG_SEC_MONITOR_BATTERY_REMOVAL
+	case param_index_normal_poweroff:
+		memcpy(&(param_data->normal_poweroff), value, sizeof(unsigned int));
+		break;
+#endif
 	default:
 		return false;
 	}
@@ -131,7 +155,7 @@ bool sec_get_param(sec_param_index index, void *value)
 }
 EXPORT_SYMBOL(sec_get_param);
 
-bool sec_set_param(sec_param_index index, void *value)
+bool sec_set_param(enum sec_param_index index, void *value)
 {
 	int ret = true;
 	int offset = SEC_PARAM_FILE_OFFSET;
@@ -167,12 +191,28 @@ bool sec_set_param(sec_param_index index, void *value)
 				value, sizeof(unsigned int));
 		break;
 #endif
+#ifdef CONFIG_RTC_AUTO_PWRON_PARAM
+	case param_index_boot_alarm_set:
+		memcpy(&(param_data->boot_alarm_set), value, sizeof(unsigned int));
+		break;
+	case param_index_boot_alarm_value_l:
+		memcpy(&(param_data->boot_alarm_value_l), value, sizeof(unsigned int));
+		break;
+	case param_index_boot_alarm_value_h:
+		memcpy(&(param_data->boot_alarm_value_h), value, sizeof(unsigned int));
+		break;
+#endif
+#ifdef CONFIG_SEC_MONITOR_BATTERY_REMOVAL
+	case param_index_normal_poweroff:
+		memcpy(&(param_data->normal_poweroff), value, sizeof(unsigned int));
+		break;
+#endif
 	default:
 		return false;
 	}
 
 	return param_sec_operation(param_data, offset,
-			sizeof(sec_param_data), PARAM_WR);
+			sizeof(struct sec_param_data), PARAM_WR);
 }
 EXPORT_SYMBOL(sec_set_param);
 
@@ -196,7 +236,7 @@ static ssize_t movinand_checksum_done_show
 		pr_err("checksum is not in valuable range.\n");
 		ret = 1;
 	}
-	return sprintf(buf, "%u\n", ret);
+	return snprintf(buf, sizeof(buf), "%u\n", ret);
 }
 static DEVICE_ATTR(movinand_checksum_done,
 				0664, movinand_checksum_done_show, NULL);
@@ -211,7 +251,7 @@ static ssize_t movinand_checksum_pass_show
 		pr_err("checksum is not in valuable range.\n");
 		ret = 1;
 	}
-	return sprintf(buf, "%u\n", ret);
+	return snprintf(buf, sizeof(buf), "%u\n", ret);
 }
 static DEVICE_ATTR(movinand_checksum_pass,
 				0664, movinand_checksum_pass_show, NULL);
@@ -249,6 +289,7 @@ int sec_param_sysfs_init(void)
 				dev_attr_movinand_checksum_pass.attr.name);
 		ret = -1;
 	}
+
 	return ret;
 
 }

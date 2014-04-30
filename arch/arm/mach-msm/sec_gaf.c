@@ -20,6 +20,8 @@
 #define arch_idle_time(cpu) 0
 #endif
 
+#define cputime64_add(__a, __b)		((__a) + (__b))
+
 static struct GAForensicINFO {
 	unsigned short ver;
 	unsigned int size;
@@ -50,9 +52,7 @@ static struct GAForensicINFO {
 	unsigned short dentry_struct_d_parent;
 	unsigned short dentry_struct_d_name;
 	unsigned short qstr_struct_name;
-	unsigned short vfsmount_struct_mnt_mountpoint;
 	unsigned short vfsmount_struct_mnt_root;
-	unsigned short vfsmount_struct_mnt_parent;
 	unsigned int pgdir_shift;
 	unsigned int ptrs_per_pte;
 	unsigned int phys_offset;
@@ -113,11 +113,15 @@ static struct GAForensicINFO {
 	.mm_struct_struct_arg_end = offsetof(struct mm_struct, arg_end),
 	.mm_struct_struct_pgd = offsetof(struct mm_struct, pgd),
 	.mm_struct_struct_mmap = offsetof(struct mm_struct, mmap),
-	.vm_area_struct_struct_vm_start = offsetof(struct vm_area_struct, vm_start),
+	.vm_area_struct_struct_vm_start =
+		offsetof(struct vm_area_struct, vm_start),
 	.vm_area_struct_struct_vm_end = offsetof(struct vm_area_struct, vm_end),
-	.vm_area_struct_struct_vm_next = offsetof(struct vm_area_struct, vm_next),
-	.vm_area_struct_struct_vm_file = offsetof(struct vm_area_struct, vm_file),
-	.thread_info_struct_cpu_context = offsetof(struct thread_info, cpu_context),
+	.vm_area_struct_struct_vm_next =
+		offsetof(struct vm_area_struct, vm_next),
+	.vm_area_struct_struct_vm_file =
+		offsetof(struct vm_area_struct, vm_file),
+	.thread_info_struct_cpu_context =
+		offsetof(struct thread_info, cpu_context),
 	.cpu_context_save_struct_sp = offsetof(struct cpu_context_save, sp),
 	.file_struct_f_path = offsetof(struct file, f_path),
 	.path_struct_mnt = offsetof(struct path, mnt),
@@ -125,16 +129,15 @@ static struct GAForensicINFO {
 	.dentry_struct_d_parent = offsetof(struct dentry, d_parent),
 	.dentry_struct_d_name = offsetof(struct dentry, d_name),
 	.qstr_struct_name = offsetof(struct qstr, name),
-	.vfsmount_struct_mnt_mountpoint = offsetof(struct vfsmount, mnt_mountpoint),
 	.vfsmount_struct_mnt_root = offsetof(struct vfsmount, mnt_root),
-	.vfsmount_struct_mnt_parent = offsetof(struct vfsmount, mnt_parent),
 	.pgdir_shift = PGDIR_SHIFT,
 	.ptrs_per_pte = PTRS_PER_PTE,
 	.phys_offset = PHYS_OFFSET,
 	.page_offset = PAGE_OFFSET,
 	.page_shift = PAGE_SHIFT,
 	.page_size = PAGE_SIZE,
-	.task_struct_struct_thread_group  = offsetof(struct task_struct, thread_group),
+	.task_struct_struct_thread_group  =
+		offsetof(struct task_struct, thread_group),
 	.task_struct_struct_utime =  offsetof(struct task_struct, utime),
 	.task_struct_struct_stime =  offsetof(struct task_struct, stime),
 	.list_head_struct_next = offsetof(struct list_head, next),
@@ -145,22 +148,31 @@ static struct GAForensicINFO {
 	.thread_info_struct_cpu = offsetof(struct thread_info, cpu),
 
 	.task_struct_struct_prio = offsetof(struct task_struct, prio),
-	.task_struct_struct_static_prio = offsetof(struct task_struct, static_prio),
-	.task_struct_struct_normal_prio = offsetof(struct task_struct, normal_prio),
-	.task_struct_struct_rt_priority = offsetof(struct task_struct, rt_priority),
+	.task_struct_struct_static_prio =
+		offsetof(struct task_struct, static_prio),
+	.task_struct_struct_normal_prio =
+		offsetof(struct task_struct, normal_prio),
+	.task_struct_struct_rt_priority =
+		offsetof(struct task_struct, rt_priority),
 
 	.task_struct_struct_se = offsetof(struct task_struct, se),
 
-	.sched_entity_struct_exec_start = offsetof(struct sched_entity, exec_start),
-	.sched_entity_struct_sum_exec_runtime = offsetof(struct sched_entity, sum_exec_runtime),
-	.sched_entity_struct_prev_sum_exec_runtime = offsetof(struct sched_entity, prev_sum_exec_runtime),
+	.sched_entity_struct_exec_start =
+		offsetof(struct sched_entity, exec_start),
+	.sched_entity_struct_sum_exec_runtime =
+		offsetof(struct sched_entity, sum_exec_runtime),
+	.sched_entity_struct_prev_sum_exec_runtime =
+		offsetof(struct sched_entity, prev_sum_exec_runtime),
 
 #if defined(CONFIG_SCHEDSTATS) || defined(CONFIG_TASK_DELAY_ACCT)
-	.task_struct_struct_sched_info = offsetof(struct task_struct, sched_info),
+	.task_struct_struct_sched_info =
+		offsetof(struct task_struct, sched_info),
 	.sched_info_struct_pcount = offsetof(struct sched_info, pcount),
 	.sched_info_struct_run_delay = offsetof(struct sched_info, run_delay),
-	.sched_info_struct_last_arrival = offsetof(struct sched_info, last_arrival),
-	.sched_info_struct_last_queued = offsetof(struct sched_info, last_queued),
+	.sched_info_struct_last_arrival =
+		offsetof(struct sched_info, last_arrival),
+	.sched_info_struct_last_queued =
+		offsetof(struct sched_info, last_queued),
 #else
 	.task_struct_struct_sched_info = 0x1223,
 	.sched_info_struct_pcount = 0x1224,
@@ -170,7 +182,8 @@ static struct GAForensicINFO {
 #endif
 
 #ifdef CONFIG_DEBUG_MUTEXES
-	.task_struct_struct_blocked_on = offsetof(struct task_struct, blocked_on),
+	.task_struct_struct_blocked_on =
+		offsetof(struct task_struct, blocked_on),
 	.mutex_waiter_struct_list = offsetof(struct mutex_waiter, list),
 	.mutex_waiter_struct_task = offsetof(struct mutex_waiter, task),
 #else
@@ -180,7 +193,8 @@ static struct GAForensicINFO {
 #endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
-	.sched_entity_struct_cfs_rq_struct = offsetof(struct sched_entity, cfs_rq),
+	.sched_entity_struct_cfs_rq_struct =
+		offsetof(struct sched_entity, cfs_rq),
 #else
 	.sched_entity_struct_cfs_rq_struct = 0x1223,
 #endif
@@ -292,19 +306,26 @@ void dump_cpu_stat(void)
 	struct timespec boottime;
 	unsigned int per_irq_sum;
 	user = nice = system = idle = iowait =
-	irq = softirq = steal = cputime64_zero;
-	guest = guest_nice = cputime64_zero;
+	irq = softirq = steal = 0;
+	guest = guest_nice = 0;
 	getboottime(&boottime);
 	jif = boottime.tv_sec;
 	for_each_possible_cpu(i) {
-		user = cputime64_add(user, kstat_cpu(i).cpustat.user);
-		nice = cputime64_add(nice, kstat_cpu(i).cpustat.nice);
-		system = cputime64_add(system, kstat_cpu(i).cpustat.system);
-		idle = cputime64_add(idle, kstat_cpu(i).cpustat.idle);
+		user = cputime64_add(user,
+				kcpustat_cpu(i).cpustat[CPUTIME_USER]);
+		nice = cputime64_add(nice,
+				kcpustat_cpu(i).cpustat[CPUTIME_NICE]);
+		system = cputime64_add(system,
+				kcpustat_cpu(i).cpustat[CPUTIME_SYSTEM]);
+		idle = cputime64_add(idle,
+				kcpustat_cpu(i).cpustat[CPUTIME_IDLE]);
 		idle = cputime64_add(idle, arch_idle_time(i));
-		iowait = cputime64_add(iowait, kstat_cpu(i).cpustat.iowait);
-		irq = cputime64_add(irq, kstat_cpu(i).cpustat.irq);
-		softirq = cputime64_add(softirq, kstat_cpu(i).cpustat.softirq);
+		iowait = cputime64_add(iowait,
+				kcpustat_cpu(i).cpustat[CPUTIME_IOWAIT]);
+		irq = cputime64_add(irq,
+				kcpustat_cpu(i).cpustat[CPUTIME_IRQ]);
+		softirq = cputime64_add(softirq,
+				kcpustat_cpu(i).cpustat[CPUTIME_SOFTIRQ]);
 		for_each_irq_nr(j) {
 			sum += kstat_irqs_cpu(j, i);
 		}
@@ -334,14 +355,14 @@ void dump_cpu_stat(void)
 	"--------------------------------\n");
 	for_each_online_cpu(i) {
 		/* Copy values here to work around gcc-2.95.3, gcc-2.96 */
-		user = kstat_cpu(i).cpustat.user;
-		nice = kstat_cpu(i).cpustat.nice;
-		system = kstat_cpu(i).cpustat.system;
-		idle = kstat_cpu(i).cpustat.idle;
+		user = kcpustat_cpu(i).cpustat[CPUTIME_USER];
+		nice = kcpustat_cpu(i).cpustat[CPUTIME_NICE];
+		system = kcpustat_cpu(i).cpustat[CPUTIME_SYSTEM];
+		idle = kcpustat_cpu(i).cpustat[CPUTIME_IDLE];
 		idle = cputime64_add(idle, arch_idle_time(i));
-		iowait = kstat_cpu(i).cpustat.iowait;
-		irq = kstat_cpu(i).cpustat.irq;
-		softirq = kstat_cpu(i).cpustat.softirq;
+		iowait = kcpustat_cpu(i).cpustat[CPUTIME_IOWAIT];
+		irq = kcpustat_cpu(i).cpustat[CPUTIME_IRQ];
+		softirq = kcpustat_cpu(i).cpustat[CPUTIME_SOFTIRQ];
 		printk(KERN_INFO " cpu%d user:%llu nice:%llu system:%llu"
 		"idle:%llu iowait:%llu  irq:%llu softirq:%llu %llu %llu "
 		"%llu\n",

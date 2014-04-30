@@ -916,8 +916,7 @@ static int pm_chg_usb_trim(struct pm8921_chg_chip *chip, int index)
 		msb = msb >> 5;
 		lsb = lsb >> 5;
 		usb_trim_reg_orig = msb << 3 | lsb;
-#if 0
-		/*Need to be looked latter  */
+
 		if (pm8xxx_get_version(chip->dev->parent)
 				== PM8XXX_VERSION_8917) {
 			rc = pm8xxx_readb(chip->dev->parent,
@@ -929,9 +928,7 @@ static int pm_chg_usb_trim(struct pm8921_chg_chip *chip, int index)
 
 			msb = msb & REG_USB_OVP_TRIM_PM8917_BIT;
 			usb_trim_reg_orig |= msb << 6;
-
 		}
-#endif
 	}
 
 	/* use the original trim value */
@@ -959,11 +956,9 @@ static int pm_chg_usb_trim(struct pm8921_chg_chip *chip, int index)
 
 	mask = USB_OVP_TRIM_MASK;
 
-#if 0
-	/*Need to be looked latter  */
 	if (pm8xxx_get_version(chip->dev->parent) == PM8XXX_VERSION_8917)
 		mask = USB_OVP_TRIM_PM8917_MASK;
-#endif
+
 	rc = pm_chg_masked_write(chip, USB_OVP_TRIM, mask, trim);
 	if (rc) {
 		pr_err("error = %d writing USB_OVP_TRIM\n", rc);
@@ -1402,7 +1397,7 @@ static enum power_supply_property pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
-/*	POWER_SUPPLY_PROP_SCOPE,*/
+	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_HEALTH,
 };
 
@@ -1519,8 +1514,6 @@ static int pm_power_set_property_usb(struct power_supply *psy,
 		return -EINVAL;
 
 	switch (psp) {
-#if 0
-	/*Need to be looked latter  */
 	case POWER_SUPPLY_PROP_SCOPE:
 		if (val->intval == POWER_SUPPLY_SCOPE_SYSTEM)
 			return switch_usb_to_host_mode(the_chip);
@@ -1529,7 +1522,6 @@ static int pm_power_set_property_usb(struct power_supply *psy,
 		else
 			return -EINVAL;
 		break;
-#endif
 	case POWER_SUPPLY_PROP_TYPE:
 		return pm8921_set_usb_power_supply_type(val->intval);
 	case POWER_SUPPLY_PROP_HEALTH:
@@ -1581,15 +1573,13 @@ static int pm_power_get_property_usb(struct power_supply *psy,
 			val->intval = is_usb_chg_plugged_in(the_chip);
 
 		break;
-#if 0
-	/*Need to be looked latter  */
+
 	case POWER_SUPPLY_PROP_SCOPE:
 		if (the_chip->host_mode)
 			val->intval = POWER_SUPPLY_SCOPE_SYSTEM;
 		else
 			val->intval = POWER_SUPPLY_SCOPE_DEVICE;
 		break;
-#endif
 	case POWER_SUPPLY_PROP_HEALTH:
 		/* UNKNOWN(0) means enable aicl, GOOD(1) means disable aicl */
 		val->intval = the_chip->disable_aicl;
@@ -2529,13 +2519,10 @@ static void unplug_ovp_fet_open(struct pm8921_chg_chip *chip)
 			break;
 		}
 	}
-#if 0
-	/*Need to be looked latter  */
 	if (pm8xxx_get_version(chip->dev->parent) == PM8XXX_VERSION_8917)
 		pm_chg_masked_write(chip, ovpreg, OVP_DEBOUNCE_TIME, 0x6);
 	else
-#endif
-	pm_chg_masked_write(chip, ovpreg, OVP_DEBOUNCE_TIME, 0x2);
+		pm_chg_masked_write(chip, ovpreg, OVP_DEBOUNCE_TIME, 0x2);
 
 	pr_debug("Exit count=%d chg_gone=%d, active_valid=%d\n",
 		count, chg_gone, active_chg_plugged_in);
@@ -2631,8 +2618,7 @@ static irqreturn_t usbin_valid_irq_handler(int irq, void *data)
 {
 	if (usb_target_ma)
 		schedule_delayed_work(&the_chip->vin_collapse_check_work,
-				      round_jiffies_relative(msecs_to_jiffies
-						(VIN_MIN_COLLAPSE_CHECK_MS)));
+			      msecs_to_jiffies(VIN_MIN_COLLAPSE_CHECK_MS));
 	else
 	    handle_usb_insertion_removal(data);
 	return IRQ_HANDLED;
@@ -3685,8 +3671,8 @@ static void eoc_worker(struct work_struct *work)
 				struct pm8921_chg_chip, eoc_work);
 	static int count;
 	int end;
-	int vbat_meas_uv, vbat_meas_mv;
-	int ichg_meas_ua, ichg_meas_ma;
+	int vbat_meas_uv = 0, vbat_meas_mv;
+	int ichg_meas_ua = 0, ichg_meas_ma;
 	int vbat_batt_terminal_uv;
 
 	pm8921_bms_get_simultaneous_battery_voltage_and_current(
@@ -3931,13 +3917,9 @@ static void __devinit determine_initial_state(struct pm8921_chg_chip *chip)
 			fsm_state);
 
 	/* Determine which USB trim column to use */
-#if 0
-	/*Need to be looked latter  */
 	if (pm8xxx_get_version(chip->dev->parent) == PM8XXX_VERSION_8917) {
 		chip->usb_trim_table = usb_trim_8917_table;
-	} else
-#endif
-	if (pm8xxx_get_version(chip->dev->parent) ==
+	} else if (pm8xxx_get_version(chip->dev->parent) ==
 						PM8XXX_VERSION_8038) {
 		chip->usb_trim_table = usb_trim_8038_table;
 	} else if (pm8xxx_get_version(chip->dev->parent) ==
@@ -4381,8 +4363,7 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 		else
 			pm_chg_write(chip, CHG_BUCK_CTRL_TEST3, 0xAC);
 	}
-#if 0
-	/*Need to be looked latter  */
+
 	if (pm8xxx_get_version(chip->dev->parent) == PM8XXX_VERSION_8917) {
 		/* Set PM8917 USB_OVP debounce time to 15 ms */
 		rc = pm_chg_masked_write(chip, USB_OVP_CONTROL,
@@ -4404,7 +4385,7 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 			}
 		}
 	}
-#endif
+
 	pm_chg_write(chip, CHG_BUCK_CTRL_TEST3, 0xD9);
 
 	/* Disable EOC FSM processing */
@@ -4742,6 +4723,90 @@ static int pm8921_charger_suspend(struct device *dev)
 
 	return 0;
 }
+#ifdef CONFIG_BATTERY_SAMSUNG
+static int is_pm8921_sec_charger_using(void)
+{
+	return 0;
+}
+
+#define BMS_CONTROL		0x224
+#define EN_BMS_BIT	BIT(7)
+#define ATC_ON_BIT	BIT(7)
+
+#define CCADC_ANA_PARAM		0x240
+#define CCADC_CONV_SEQ_CNTR	0x246
+
+#define CCADC_EN_MASK 0x01
+#define EN_CONV_SEQ_MASK 0x01
+
+static void pm8921_sec_charger_disable(struct pm8921_chg_chip *chip)
+{
+	int rc;
+	pr_debug("disable pm8921 charger\n");
+
+	rc = pm_chg_vweak_set(chip, 2500);
+	if (rc) {
+		pr_err("Failed to set weak voltage to %dmv  rc=%d\n",
+						chip->weak_voltage, rc);
+		return;
+	}
+
+	/*SW Trickle Charging mode */
+	rc = pm_chg_masked_write(chip, CHG_CNTRL_2,
+				ATC_ON_BIT, 0);
+	if (rc) {
+		pr_err("Failed to set ATC off rc=%d\n", rc);
+		return;
+	}
+
+	/* sec don't use temperature control function */
+	rc = pm_chg_masked_write(chip, CHG_CNTRL_2,
+				CHG_BAT_TEMP_DIS_BIT, CHG_BAT_TEMP_DIS_BIT);
+	if (rc) {
+		pr_err("Failed to enable temp control chg rc=%d\n", rc);
+		return;
+	}
+
+	/* Workarounds for die 3.0 */
+	if (pm8xxx_get_revision(chip->dev->parent) == PM8XXX_REVISION_8921_3p0)
+		pm8xxx_writeb(chip->dev->parent, CHG_BUCK_CTRL_TEST3, 0xAC);
+
+	pm8xxx_writeb(chip->dev->parent, CHG_BUCK_CTRL_TEST3, 0xD9);
+
+	/* Disable EOC FSM processing */
+	pm8xxx_writeb(chip->dev->parent, CHG_BUCK_CTRL_TEST3, 0x91);
+
+	/* Disable Charging */
+	charging_disabled = 1;
+	rc = pm_chg_charge_dis(chip, charging_disabled);
+	if (rc) {
+		pr_err("Failed to disable CHG_CHARGE_DIS bit rc=%d\n", rc);
+		return;
+	}
+
+	rc = pm_chg_auto_enable(chip, !charging_disabled);
+	if (rc) {
+		pr_err("Failed to enable charging rc=%d\n", rc);
+		return;
+	}
+
+	/* Disable BMS */
+#ifndef CONFIG_PM8921_BMS
+	rc = pm_chg_masked_write(chip, BMS_CONTROL, EN_BMS_BIT, 0);
+	if (rc)
+		pr_err("failed to disable bms addr = %d %d", BMS_CONTROL, rc);
+#endif
+	/*  Disable CCADC */
+	rc = pm_chg_masked_write(chip, CCADC_ANA_PARAM, CCADC_EN_MASK, 0);
+	if (rc)
+		pr_err("failed to disable ccadc_ana addr = %d %d", CCADC_ANA_PARAM, rc);
+	rc = pm_chg_masked_write(chip, CCADC_CONV_SEQ_CNTR, EN_CONV_SEQ_MASK, 0);
+	if (rc)
+		pr_err("failed to disable ccadc_conv addr = %d %d", CCADC_CONV_SEQ_CNTR, rc);
+	pm8921_chg_set_hw_clk_switching(chip);
+}
+#endif
+
 static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -4762,6 +4827,15 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	}
 
 	chip->dev = &pdev->dev;
+#ifdef CONFIG_BATTERY_SAMSUNG
+	/* Disable BMS to reduce sleep current */
+	if (!is_pm8921_sec_charger_using()) {
+		pm8921_sec_charger_disable(chip);
+		pr_info("pm8921-charger driver Loading SKIP!!!\n");
+		rc = -EINVAL;
+		goto free_chip;
+	}
+#endif
 	chip->ttrkl_time = pdata->ttrkl_time;
 	chip->update_time = pdata->update_time;
 	chip->max_voltage_mv = pdata->max_voltage;
@@ -4845,10 +4919,8 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 		pm8921_chg_btc_override_init(chip);
 
 	chip->stop_chg_upon_expiry = pdata->stop_chg_upon_expiry;
-#if 0
-	/*Need to be looked latter  */
 	chip->usb_type = POWER_SUPPLY_TYPE_UNKNOWN;
-#endif
+
 	chip->usb_psy.name = "usb";
 	chip->usb_psy.type = POWER_SUPPLY_TYPE_USB;
 	chip->usb_psy.supplied_to = pm_power_supplied_to;

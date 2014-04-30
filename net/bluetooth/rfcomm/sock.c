@@ -1,5 +1,6 @@
 /*
    RFCOMM implementation for Linux Bluetooth stack (BlueZ).
+   Copyright (c) 2013 The Linux Foundation.  All rights reserved.
    Copyright (C) 2002 Maxim Krasnyansky <maxk@qualcomm.com>
    Copyright (C) 2002 Marcel Holtmann <marcel@holtmann.org>
 
@@ -485,6 +486,11 @@ static int rfcomm_sock_accept(struct socket *sock, struct socket *newsock, int f
 
 	lock_sock(sk);
 
+	if (sk->sk_state != BT_LISTEN) {
+		err = -EBADFD;
+		goto done;
+	}
+
 	if (sk->sk_type != SOCK_STREAM) {
 		err = -EINVAL;
 		goto done;
@@ -496,20 +502,19 @@ static int rfcomm_sock_accept(struct socket *sock, struct socket *newsock, int f
 
 	/* Wait for an incoming connection. (wake-one). */
 	add_wait_queue_exclusive(sk_sleep(sk), &wait);
-	while (1) {
+	while (!(nsk = bt_accept_dequeue(sk, newsock))) {
 		set_current_state(TASK_INTERRUPTIBLE);
-
-		if (sk->sk_state != BT_LISTEN) {
-			err = -EBADFD;
+		if (!timeo) {
+			err = -EAGAIN;
 			break;
 		}
 
-		nsk = bt_accept_dequeue(sk, newsock);
-		if (nsk)
-			break;
+		release_sock(sk);
+		timeo = schedule_timeout(timeo);
+		lock_sock(sk);
 
-		if (!timeo) {
-			err = -EAGAIN;
+		if (sk->sk_state != BT_LISTEN) {
+			err = -EBADFD;
 			break;
 		}
 
@@ -517,12 +522,8 @@ static int rfcomm_sock_accept(struct socket *sock, struct socket *newsock, int f
 			err = sock_intr_errno(timeo);
 			break;
 		}
-
-		release_sock(sk);
-		timeo = schedule_timeout(timeo);
-		lock_sock(sk);
 	}
-	__set_current_state(TASK_RUNNING);
+	set_current_state(TASK_RUNNING);
 	remove_wait_queue(sk_sleep(sk), &wait);
 
 	if (err)
@@ -679,8 +680,7 @@ static int rfcomm_sock_setsockopt(struct socket *sock, int level, int optname, c
 {
 	struct sock *sk = sock->sk;
 	struct bt_security sec;
-	int err = 0;
-	size_t len;
+	int len, err = 0;
 	u32 opt;
 
 	BT_DBG("sk %p", sk);
@@ -708,12 +708,13 @@ static int rfcomm_sock_setsockopt(struct socket *sock, int level, int optname, c
 			break;
 		}
 
-		if (sec.level > BT_SECURITY_HIGH) {
+		if (sec.level > BT_SECURITY_VERY_HIGH) {
 			err = -EINVAL;
 			break;
 		}
 
 		rfcomm_pi(sk)->sec_level = sec.level;
+		BT_DBG("set to %d", sec.level);
 		break;
 
 	case BT_DEFER_SETUP:
@@ -742,8 +743,8 @@ static int rfcomm_sock_setsockopt(struct socket *sock, int level, int optname, c
 static int rfcomm_sock_getsockopt_old(struct socket *sock, int optname, char __user *optval, int __user *optlen)
 {
 	struct sock *sk = sock->sk;
+	struct sock *l2cap_sk;
 	struct rfcomm_conninfo cinfo;
-	struct l2cap_conn *conn = l2cap_pi(sk)->chan->conn;
 	int len, err = 0;
 	u32 opt;
 
@@ -764,6 +765,7 @@ static int rfcomm_sock_getsockopt_old(struct socket *sock, int optname, char __u
 			opt = RFCOMM_LM_AUTH | RFCOMM_LM_ENCRYPT;
 			break;
 		case BT_SECURITY_HIGH:
+		case BT_SECURITY_VERY_HIGH:
 			opt = RFCOMM_LM_AUTH | RFCOMM_LM_ENCRYPT |
 							RFCOMM_LM_SECURE;
 			break;
@@ -786,10 +788,10 @@ static int rfcomm_sock_getsockopt_old(struct socket *sock, int optname, char __u
 			break;
 		}
 
+		l2cap_sk = rfcomm_pi(sk)->dlc->session->sock->sk;
 
-		memset(&cinfo, 0, sizeof(cinfo));
-		cinfo.hci_handle = conn->hcon->handle;
-		memcpy(cinfo.dev_class, conn->hcon->dev_class, 3);
+		cinfo.hci_handle = l2cap_pi(l2cap_sk)->conn->hcon->handle;
+		memcpy(cinfo.dev_class, l2cap_pi(l2cap_sk)->conn->hcon->dev_class, 3);
 
 		len = min_t(unsigned int, len, sizeof(cinfo));
 		if (copy_to_user(optval, (char *) &cinfo, len))

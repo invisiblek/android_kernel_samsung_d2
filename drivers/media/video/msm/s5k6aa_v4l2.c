@@ -41,7 +41,7 @@
 
 #define CAM_5M_RST		107
 #define CAM_5M_ISP_INIT	4
-#define CAM_1_3M_RST 	76
+#define CAM_1_3M_RST	76
 #define CAM_1_3M_EN		18
 #define CAM_MCLK			5
 #define CAM_I2C_SDA		20
@@ -264,12 +264,12 @@ static int s5k6aa_i2c_write_list(s5k6aa_short_t regs[], int size, char *name)
 		}
                 else
                  {
-        		err = s5k6aa_i2c_write_multi(regs[i].subaddr, regs[i].value);
+			err = s5k6aa_i2c_write_multi(regs[i].subaddr, regs[i].value);
 
-        		if (unlikely(err < 0)) {
-        			printk(KERN_ERR "%s: register set failed\n",  __func__);
-        			return -EIO;
-        		}
+			if (unlikely(err < 0)) {
+				printk(KERN_ERR "%s: register set failed\n",  __func__);
+				return -EIO;
+			}
                 }
 	}
 #endif
@@ -816,4 +816,3 @@ static int __init s5k6aa_init(void)
 }
 
 module_init(s5k6aa_init);
-

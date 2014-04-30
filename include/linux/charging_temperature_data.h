@@ -29,7 +29,7 @@
 #define DEFAULT_LOW_RECOVER_TEMP	0
 
 #if defined(CONFIG_MACH_JAGUAR)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26250,	 800},
 	{26583,	 750},
 	{26979,	 700},
@@ -54,7 +54,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_ATT)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26465,	 800},
 	{26749,	 750},
 	{27017,	 700},
@@ -79,7 +79,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_SPR)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26385,	 800},
 	{26787,	 750},
 	{27136,	 700},
@@ -104,7 +104,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_VZW)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26537,	 800},
 	{26849,	 750},
 	{27211,	 700},
@@ -129,7 +129,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_INFINITE)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26478,	 800},
 	{27123,	 700},
 	{27985,	 600},
@@ -144,7 +144,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_AEGIS2)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{27401,	 650},
 	{27790,	 600},
 	{28378,	 550},
@@ -165,9 +165,68 @@ static const int temp_table[][2] = {
 	{41328,	-200},
 	{41656,	-250},
 };
-
+#elif defined (CONFIG_MACH_SERRANO_EUR_LTE) || defined (CONFIG_MACH_SERRANO_EUR_3G)
+static const struct pm8xxx_adc_map_pt temp_table[] = {
+	{176175,	 800},
+	{207608,	 750},
+	{241736,	 700},
+	{282817,	 650},
+	{322315,	 620},
+	{350051,	 600},
+	{372193,	 580},
+	{390293,	 550},
+	{480453,	 500},
+	{534549,	 470},
+	{570613,	 450},
+	{606677,	 430},
+	{660773,	 400},
+	{750933,	 350},
+	{841093,	 300},
+	{931253,	 250},
+	{1021413,	 200},
+	{1111573,	 150},
+	{1201733,	 100},
+	{1291893,	  50},
+	{1350492,	  20},
+	{1382053,	   0},
+	{1428241,	 -30},
+	{1446550,	 -50},
+	{1567698,	-100},
+	{1587330,	-150},
+	{1652015,	-200},
+};
+#elif defined (CONFIG_MACH_WILCOX_EUR_LTE)
+static const struct pm8xxx_adc_map_pt temp_table[] = {
+	{176175,	 800},
+	{207608,	 750},
+	{241736,	 700},
+	{282817,	 650},
+	{322315,	 620},
+	{350051,	 600},
+	{372193,	 580},
+	{390293,	 550},
+	{480453,	 500},
+	{534549,	 470},
+	{570613,	 450},
+	{606677,	 430},
+	{660773,	 400},
+	{750933,	 350},
+	{841093,	 300},
+	{931253,	 250},
+	{1021413,	 200},
+	{1111573,	 150},
+	{1201733,	 100},
+	{1291893,	  50},
+	{1350492,	  20},
+	{1382053,	   0},
+	{1428241,	 -30},
+	{1446550,	 -50},
+	{1567698,	-100},
+	{1587330,	-150},
+	{1652015,	-200},
+};
 #else
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26250,	 800},
 	{26583,	 750},
 	{26979,	 700},

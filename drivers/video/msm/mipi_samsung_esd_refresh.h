@@ -39,16 +39,13 @@
 #include <linux/timer.h>
 #include <linux/wakelock.h>
 #include <linux/slab.h>
+#include <linux/gpio.h>
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 
 #define WAKE_LOCK_TIME		(10 * HZ)	/* 1 sec */
 #define ESD_EXCEPT_CNT 0
 #define LP11_RECOVERY 0
-
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_WVGA_PT)
-#define READ_REGISTER_ESD
-#endif
 
 extern void set_esd_refresh(boolean status);
 extern struct class *sec_class;
@@ -70,13 +67,8 @@ struct mipi_controls {
 	struct early_suspend early_suspend;
 #endif
 };
-#if defined(CONFIG_SAMSUNG_CMC624)
-bool samsung_has_cmc624(void);
-#endif
-#if defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_VIDEO_HD_PT) || \
-	defined(CONFIG_FB_MSM_MIPI_SAMSUNG_OLED_CMD_QHD_PT)
-extern void reset_gamma_level(void);
-#endif
+
+
 void register_mipi_dev(struct platform_device *mipi_dev);
 extern void set_esd_enable(void);
 extern void set_esd_disable(void);

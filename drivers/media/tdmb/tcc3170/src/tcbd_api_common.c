@@ -59,12 +59,12 @@ s32 tcbd_device_start(struct tcbd_device *_device,
 	tcbd_enable_peri(_device);
 	ret = tcbd_init_dsp(_device, dsp_rom, size);
 	if (ret < 0) {
-		tcbd_debug(DEBUG_ERROR, "failed to initialize dsp!! "
+		tcbd_debug(DEBUG_ERROR, "failed to initialize dsp!! "\
 						"error:%d\n", ret);
 		return -TCERR_FATAL_ERROR;
 	} else {
 		tcbd_get_rom_version(_device, &ver);
-		tcbd_debug(DEBUG_API_COMMON, "device start success!! "
+		tcbd_debug(DEBUG_API_COMMON, "device start success!! "\
 						"version:0x%X\n", ver);
 	}
 	return 0;
@@ -216,10 +216,10 @@ s32 tcbd_read_stream(struct tcbd_device *_device, u8 *_buff, s32 *_size)
 	bytes_remain = SWAP16(bytes_remain) << 2;
 	bytes_read = bytes_read + bytes_remain - _device->size_more_read;
 	tcbd_debug(DEBUG_STREAM_READ, "%d bytes remain, real data size:%d\n",
-						bytes_remain, bytes_read);
+		bytes_remain, bytes_read);
 
 	if ((_device->intr_threshold << 1) < bytes_read) {
-		tcbd_debug(DEBUG_ERROR, "Could not read data over "
+		tcbd_debug(DEBUG_ERROR, "Could not read data over "\
 					"TCBD_MAX_THRESHOLD(%d)\n",
 					bytes_read);
 		return -TCERR_FATAL_ERROR;
@@ -252,7 +252,7 @@ s32 tcbd_tune_frequency(
 
 	ret |= tcbd_rf_tune_frequency(_device, _freq_khz, _bw_khz);
 	if (ret < 0) {
-		tcbd_debug(DEBUG_ERROR, "failed to tune frequency to RF!! "
+		tcbd_debug(DEBUG_ERROR, "failed to tune frequency to RF!! "\
 					"ret:%d\n", ret);
 		return ret;
 	}
@@ -276,8 +276,8 @@ s32 tcbd_tune_frequency(
 
 	ret |= tcbd_demod_tune_frequency(_device, _freq_khz, _bw_khz);
 	if (ret < 0) {
-		tcbd_debug(DEBUG_ERROR, "failed to tune frequency "
-					"to demodulator!! ret:%d\n", ret);
+		tcbd_debug(DEBUG_ERROR, "failed to tune frequency "\
+			"to demodulator!! ret:%d\n", ret);
 		return ret;
 	}
 	_device->prev_band = _device->curr_band;
@@ -363,11 +363,11 @@ static inline s32 tcbd_calc_threshold(struct tcbd_service *_service)
 	if (TCBD_MAX_THRESHOLD < threshold)
 		threshold  = TCBD_MAX_THRESHOLD;
 
-	tcbd_debug(DEBUG_API_COMMON, "ptype:%s, bitrate :%d, interrupt "
+	tcbd_debug(DEBUG_API_COMMON, "ptype:%s, bitrate :%d, interrupt "\
 			"threshold:%d\n", (_service->ptype) ? "EEP" : "UEP",
 			 _service->bitrate, threshold);
-	threshold = (threshold>>1);
-	return threshold;
+
+	return threshold>>1;
 }
 
 static inline s32 tcbd_find_empty_slot(
@@ -414,11 +414,11 @@ static inline s32 tcbd_set_service(struct tcbd_device *_device,
 		if (_flag == FLAG_LONG_PARAM) {
 			threshold = tcbd_calc_threshold(_service);
 			sel_stream = STREAM_SET_GARBAGE(threshold) |
-							STREAM_TYPE_ALL;
+				STREAM_TYPE_ALL;
 		} else {
-			threshold = TCBD_MAX_THRESHOLD;
-			sel_stream = STREAM_SET_GARBAGE(TCBD_MAX_THRESHOLD) |
-							STREAM_TYPE_ALL;
+		threshold = TCBD_MAX_THRESHOLD;
+		sel_stream = STREAM_SET_GARBAGE(TCBD_MAX_THRESHOLD) |
+				STREAM_TYPE_ALL;
 		}
 		tcbd_debug(DEBUG_API_COMMON, "threshold : %d\n", threshold);
 		en_cmd_fifo = ENABLE_CMD_FIFO;
@@ -467,8 +467,8 @@ s32 tcbd_register_service(struct tcbd_device *_device, u8 _subch_id,
 	u32 *service_info = mult_service->service_info;
 
 	if (tcbd_find_used_slot(mult_service, _subch_id) >= 0) {
-		tcbd_debug(DEBUG_ERROR, "aready registerd service! "
-					"subch_id:%d\n", _subch_id);
+		tcbd_debug(DEBUG_ERROR, "aready registerd service! "\
+			"subch_id:%d\n", _subch_id);
 		return -TCERR_AREADY_REGISTERED;
 	}
 
@@ -503,7 +503,7 @@ s32 tcbd_register_service_long(struct tcbd_device *_device,
 	u32 *service_info = mult_service->service_info;
 
 	if (tcbd_find_used_slot(mult_service, _service->subch_id) >= 0) {
-		tcbd_debug(DEBUG_ERROR, "aready registerd service! "
+		tcbd_debug(DEBUG_ERROR, "aready registerd service! "\
 					"subch_id:%d\n", _service->subch_id);
 		return -TCERR_AREADY_REGISTERED;
 	}
@@ -592,7 +592,7 @@ s32 tcbd_read_fic_data(struct tcbd_device *_device, u8 *_buff,	s32 _size)
 exit_read_fic:
 	tcbd_clear_irq(_device, status);
 	return ret;
-}
+	}
 
 static s32 tcbd_disp_dsp_debug(struct tcbd_device *_device)
 {
@@ -607,10 +607,10 @@ static s32 tcbd_disp_dsp_debug(struct tcbd_device *_device)
 
 	ret = tcbd_read_mail_box(_device, cmd, len, data);
 	if (ret < 0) {
-		tcbd_debug(DEBUG_ERROR, "failed to read mail box, "
+		tcbd_debug(DEBUG_ERROR, "failed to read mail box, "\
 					"err:%d\n", ret);
-		return ret;
-	}
+	return ret;
+}
 
 	for (i = 0; i < 6; i++)
 		pos_buf += sprintf(debug_buff + pos_buf, "[%d:%08X]",

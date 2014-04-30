@@ -128,12 +128,15 @@ _decode_session6(struct sk_buff *skb, struct flowi *fl, int reverse)
 	struct ipv6_opt_hdr *exthdr;
 	const unsigned char *nh = skb_network_header(skb);
 	u8 nexthdr = nh[IP6CB(skb)->nhoff];
+	if (IP6CB(skb)->nhoff == 0) {
+		nexthdr = ipv6_hdr(skb)->nexthdr;
+	}
 
 	memset(fl6, 0, sizeof(struct flowi6));
 	fl6->flowi6_mark = skb->mark;
 
-	ipv6_addr_copy(&fl6->daddr, reverse ? &hdr->saddr : &hdr->daddr);
-	ipv6_addr_copy(&fl6->saddr, reverse ? &hdr->daddr : &hdr->saddr);
+	fl6->daddr = reverse ? hdr->saddr : hdr->daddr;
+	fl6->saddr = reverse ? hdr->daddr : hdr->saddr;
 
 	while (nh + offset + 1 < skb->data ||
 	       pskb_may_pull(skb, nh + offset + 1 - skb->data)) {

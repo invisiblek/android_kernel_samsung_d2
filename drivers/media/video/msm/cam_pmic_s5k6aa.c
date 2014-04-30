@@ -27,7 +27,7 @@ struct regulator *l11_s5k6aa,*l12_s5k6aa,*l16_s5k6aa,*l18_s5k6aa,*l29_s5k6aa;
 	CAM_AF_2.8				: VREG_L11		: l11
 	CAM_SENSOR_CORE1.2		: VREG_L12		: l12
 	CAM_ISP_CORE_1.2		: CAM_CORE_EN(GPIO 6)
-	
+
 	CAM_DVDD_1.5		: VREG_L18		: l18
 */
 void cam_ldo_power_on_s5k6aa(void)
@@ -36,7 +36,7 @@ void cam_ldo_power_on_s5k6aa(void)
 	int temp = 0;
 	printk("[s5k6aa]cam_ldo_power_on\n");
 
-//CAM_IO_1.8V 
+//CAM_IO_1.8V
 	l29_s5k6aa = regulator_get(NULL, "8921_l29");
 	ret = regulator_set_voltage(l29_s5k6aa, 1800000, 1800000);
 	if (ret) {
@@ -47,8 +47,8 @@ void cam_ldo_power_on_s5k6aa(void)
 	printk("%s: error enabling regulator\n", __func__);
 	}
 	mdelay(5);
-	
-// CAM_A_2.8V 
+
+// CAM_A_2.8V
 	l16_s5k6aa = regulator_get(NULL, "8921_l16");
 	ret = regulator_set_voltage(l16_s5k6aa, 2800000, 2800000);
 	if (ret) {
@@ -85,7 +85,7 @@ void cam_ldo_power_off_s5k6aa(void)
 		printk("%s: error disabling regulator\n", __func__);
 		}
 		//regulator_put(lvs0);
-	}	
+	}
 	mdelay(5);
 
 	//CAM_IO_1.8V
@@ -95,7 +95,7 @@ void cam_ldo_power_off_s5k6aa(void)
 		printk("%s: error disabling regulator\n", __func__);
 		}
 		//regulator_put(lvs0);
-	}	
+	}
 	mdelay(5);
 
 	//VT_CORE_1.5V(sub)
@@ -105,9 +105,9 @@ void cam_ldo_power_off_s5k6aa(void)
 		printk("%s: error disabling regulator\n", __func__);
 		}
 		//regulator_put(lvs0);
-	}	
+	}
 	mdelay(5);
-	
+
 	//SENSOR_CORE_1.2V
 	if (l12_s5k6aa) {
 		ret = regulator_disable(l12_s5k6aa);
@@ -115,22 +115,21 @@ void cam_ldo_power_off_s5k6aa(void)
 		printk("%s: error disabling regulator\n", __func__);
 		}
 		//regulator_put(lvs0);
-	}	
+	}
 	mdelay(5);
-	
-	// CAM_A_2.8V 
+
+	// CAM_A_2.8V
 	if (l16_s5k6aa) {
 		ret = regulator_disable(l16_s5k6aa);
 		if (ret) {
 		printk("%s: error disabling regulator\n", __func__);
 		}
 		//regulator_put(lvs0);
-	}	
+	}
 	mdelay(5);
-	
-	//CAM_ISP_CORE_1.2
-	gpio_set_value_cansleep(CAM_CORE_EN, LOW);  
-	mdelay(5);
-	
-}
 
+	//CAM_ISP_CORE_1.2
+	gpio_set_value_cansleep(CAM_CORE_EN, LOW);
+	mdelay(5);
+
+}

@@ -51,8 +51,11 @@
 #include "tcbd_stream_parser.h"
 #include "tcc_fic_decoder.h"
 #include "tcbd_drv_ip.h"
+#include "tcc_fic_decoder.h"
 
 #include "tcbd_hal.h"
+
+ #define TCBD_CLOCK CLOCK_24576KHZ
 
 /* #define TDMB_DEBUG_SCAN */
 
@@ -98,7 +101,7 @@ static bool __get_ensemble_info(struct ensemble_info_type *e_info
 	ensbl_info = tcc_fic_get_ensbl_info(1);
 	esbl = &ensbl_info->ensbl;
 
-	memset(e_info, 0, sizeof(e_info));
+	memset(e_info, 0, sizeof(struct ensemble_info_type));
 
 	e_info->ensem_freq = freq;
 	e_info->ensem_id = esbl->eid;
@@ -199,7 +202,7 @@ static bool tcc3170_power_on(void)
 #error
 #endif /* CONFIG_TDMB_SPI */
 			if (tcbd_device_start \
-				(&tcc3170_device, CLOCK_24576KHZ) < 0) {
+				(&tcc3170_device, TCBD_CLOCK) < 0) {
 				DPRINTK("could not start device!!\n");
 				tcbd_io_close(&tcc3170_device);
 				tdmb_control_gpio(false);
@@ -393,8 +396,8 @@ static void tcc3170_pull_data(void)
 	if (ret == 0 && !irq_error) {
 		tcbd_split_stream(0, buff_read, size);
 	} else {
-		DPRINTK("### buffer is full, skip the data "
-			"(ret:%d, status=0x%02X, error=0x%02X)  ###\n",
+		DPRINTK("### buffer is full, skip the data "\
+			"(ret:%d, status=0x%02X, error=0x%02X) ###\n",
 				ret, irq_status, irq_error);
 
 		tcbd_init_stream_data_config(&tcc3170_device,

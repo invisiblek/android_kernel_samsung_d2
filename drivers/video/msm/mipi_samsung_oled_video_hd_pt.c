@@ -12,6 +12,8 @@
  */
 
 #include "msm_fb.h"
+#include "msm_fb_panel.h"
+#include "mipi_dsi.h"
 #include "mipi_samsung_oled.h"
 #ifdef CONFIG_SAMSUNG_CMC624
 #include "samsung_cmc624.h"
@@ -19,6 +21,8 @@
 
 static struct msm_panel_info pinfo;
 static struct mipi_panel_data mipi_pd;
+
+extern unsigned char LCD_Get_Value(void);
 
 #define MAX_GAMMA_VALUE 25
 #define FAST_INIT_MAX_CMDS ARRAY_SIZE(samsung_panel_ready_to_on_cmds_4_8_fast)
@@ -50,30 +54,6 @@ static char panel_cond_set[] = {
 	0x01, 0x81, 0xC1, 0x00, 0xC1,
 	0xF6, 0xF6, 0xC1
 };
-#elif defined(CONFIG_MACH_STRETTO)
-static char panel_cond_set[] = {
-	0xF8,
-	0x3D, 0x35, 0x00, 0x00, 0x00,
-	0x93, 0x00, 0x3C, 0x7D, 0x08,
-	0x27, 0x7D, 0x3F, 0x00, 0x00,
-	0x00, 0x20, 0x04, 0x08, 0x6E,
-	0x00, 0x00, 0x00, 0x02, 0x08,
-	0x08, 0x23, 0x23, 0xC0, 0xC8,
-	0x08, 0x48, 0xC1, 0x00, 0xC1,
-	0xFF, 0xFF, 0xC8
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char panel_cond_set[] = {
-	0xF8,
-	0x3D, 0x35, 0x00, 0x00, 0x00,
-	0x93, 0x00, 0x3C, 0x7D, 0x08,
-	0x27, 0x7D, 0x3F, 0x00, 0x00,
-	0x00, 0x20, 0x04, 0x08, 0x6E,
-	0x00, 0x00, 0x00, 0x02, 0x08,
-	0x08, 0x23, 0x23, 0xC0, 0xC8,
-	0x08, 0x48, 0xC1, 0x00, 0xC1,
-	0xFF, 0xFF, 0xC8
-};
 #else
 static char panel_cond_set[] = {
 	0xF8,
@@ -88,31 +68,6 @@ static char panel_cond_set[] = {
 };
 #endif
 /* FOR 4.8 inch */
-#ifdef CONFIG_MIPI_CLK_487
-static char panel_cond_set_4_8[] = {
-	0xF8,
-	0x19, 0x33, 0x00, 0x00, 0x00,
-	0x90, 0x00, 0x3B, 0x7A, 0x0F,
-	0x26, 0x08, 0x6B, 0x00, 0x00,
-	0x00, 0x00, 0x04, 0x08, 0x6B,
-	0x00, 0x00, 0x00, 0x00, 0x07,
-	0x07, 0x22, 0x35, 0xC0, 0xC1,
-	0x01, 0x81, 0xC1, 0x00, 0xC3,
-	0xF6, 0xF6, 0xC1
-};
-#elif defined(CONFIG_MACH_K2_KDI)
-static char panel_cond_set_4_8[] = {
-	0xF8,
-	0x3D, 0x35, 0x00, 0x00, 0x00,
-	0x94, 0x00, 0x3C, 0x7D, 0x10,
-	0x27, 0x08, 0x6E, 0x00, 0x00,
-	0x00, 0x00, 0x04, 0x08, 0x6E,
-	0x00, 0x00, 0x00, 0x00, 0x08,
-	0x08, 0x23, 0x37, 0xC0, 0xC8,
-	0x08, 0x48, 0xC1, 0x00, 0xC3,
-	0xFF, 0xFF, 0xC8
-};
-#else
 static char panel_cond_set_4_8[] = {
 	0xF8,
 	0x19, 0x35, 0x00, 0x00, 0x00,
@@ -124,7 +79,6 @@ static char panel_cond_set_4_8[] = {
 	0x01, 0x81, 0xC1, 0x00, 0xC3,
 	0xF6, 0xF6, 0xC1
 };
-#endif
 /*
  * [2] Display Condition Set
  */
@@ -132,28 +86,6 @@ static char display_cond_set[] = {
 	0xF2,
 	0x80, 0x03, 0x0D
 };
-
-static char display_cond_set_cmc[] = {
-	0xF2,
-	0x80, 0x03, 0x0D
-};
-
-#if defined(CONFIG_MACH_STRETTO)
-static char display_cond_set_none_cmc[] = {
-	0xF2,
-	0x80, 0x03, 0x0D
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char display_cond_set_none_cmc[] = {
-	0xF2,
-	0x80, 0x03, 0x0D
-};
-#else
-static char display_cond_set_none_cmc[] = {
-	0xF2,
-	0x80, 0x03, 0x35
-};
-#endif
 
 /*
  * [3] Gamma Condition Set
@@ -171,23 +103,6 @@ static char gamma_cond_set[] = {
 };
 */
 /* For 4.65 inch */
-#if defined(CONFIG_MACH_STRETTO)
-static char gamma_cond_set[] = {
-	0xFA,
-	0x01, 0x5F, 0x2E, 0x67, 0xAA, 0xC6,
-	0xAC, 0xB0, 0xC8, 0xBB, 0xBE, 0xCB,
-	0xBD, 0x97, 0xA5, 0x91, 0xAF, 0xB8,
-	0xAB, 0x00, 0xC2, 0x00, 0xBA, 0x00, 0xE2
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char gamma_cond_set[] = {
-	0xFA,
-	0x01, 0x5F, 0x2E, 0x67, 0xAA, 0xC6,
-	0xAC, 0xB0, 0xC8, 0xBB, 0xBE, 0xCB,
-	0xBD, 0x97, 0xA5, 0x91, 0xAF, 0xB8,
-	0xAB, 0x00, 0xC2, 0x00, 0xBA, 0x00, 0xE2
-};
-#else
 static char gamma_cond_set[] = {
 	0xFA,
 	0x01, 0x4A, 0x01, 0x4D, 0x85, 0xAD,
@@ -195,7 +110,6 @@ static char gamma_cond_set[] = {
 	0xBD, 0x95, 0xBD, 0x95, 0xB7, 0xCE,
 	0xB5, 0x00, 0x8F, 0x00, 0x82, 0x00, 0xB8,
 };
-#endif
 /* For 4.8 inch */
 static char gamma_cond_set_4_8[] = {
 	0xFA,
@@ -233,28 +147,12 @@ static char etc_cond_set2_4_8[] = {
 	0x44, 0x44, 0xC0, 0x00
 };
 /* For 4.65 inch */
-#if defined(CONFIG_MACH_STRETTO)
-static char etc_cond_set3[] = {
-	0xD9,
-	0x14, 0x40, 0x0C, 0xCB, 0xCE,
-	0x6E, 0xC4, 0x07, 0x40, 0x41,
-	0xD0, 0x00, 0x60, 0x19
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char etc_cond_set3[] = {
-	0xD9,
-	0x14, 0x40, 0x0C, 0xCB, 0xCE,
-	0x6E, 0xC4, 0x07, 0x40, 0x41,
-	0xD0, 0x00, 0x60, 0x19
-};
-#else
 static char etc_cond_set3[] = {
 	0xD9,
 	0x14, 0x40, 0x0C, 0xCB, 0xCE,
 	0x6E, 0xC4, 0x07, 0x40, 0x40,
 	0xD0, 0x00, 0x60, 0x19
 };
-#endif
 /* For 4.8 inch */
 static char etc_cond_set3_4_8[] = {
 	0xD9,
@@ -323,27 +221,9 @@ static char acl_on[] = {
 	0x00, 0x00, 0x00, 0x00,
 };
 
-static char acl_set_zero[] = {
-	0xC1,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-
 static char acl_off[] = {
-	0xC1,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00,
+	0xC0,
+	0x00,
 	/* adding 8 byte padding*/
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
@@ -409,31 +289,6 @@ static char gamma_cond_300cd_4_8[] = {
 	0xB0, 0x00, 0xA0, 0x00, 0xCC
 };
 
-#if defined(CONFIG_MACH_STRETTO)
-static char GAMMA_SmartDimming_COND_SET[] = {
-	0xFA,
-	0x01, 0x5F, 0x2E, 0x67, 0xAA,
-	0xC6, 0xAC, 0xB0, 0xC8, 0xBB,
-	0xBE, 0xCB, 0xBD, 0x97, 0xA5,
-	0x91, 0xAF, 0xB8, 0xAB, 0x00,
-	0xC2, 0x00, 0xBA, 0x00, 0xE2,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char GAMMA_SmartDimming_COND_SET[] = {
-	0xFA,
-	0x01, 0x5F, 0x2E, 0x67, 0xAA,
-	0xC6, 0xAC, 0xB0, 0xC8, 0xBB,
-	0xBE, 0xCB, 0xBD, 0x97, 0xA5,
-	0x91, 0xAF, 0xB8, 0xAB, 0x00,
-	0xC2, 0x00, 0xBA, 0x00, 0xE2,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-#else
 static char GAMMA_SmartDimming_COND_SET[] = {
 	0xFA,
 	0x01, 0x4A, 0x01, 0x4D, 0x7A,
@@ -445,24 +300,8 @@ static char GAMMA_SmartDimming_COND_SET[] = {
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
-#endif
 
-#if defined(CONFIG_MACH_K2_KDI)
-static char panel_cond_aid_ref[] = {
-	0xF8,
-	0x3D, 0x35, 0x00, 0x00, 0x00,
-	0x94, 0x00, 0x3C, 0x7D, 0x10,
-	0x27, 0x08, 0x6E, 0x00, 0x00,
-	0x00, 0x00, 0x04, 0x08, 0x6E,
-	0x00, 0x00, 0x00, 0x00, 0x08,
-	0x08, 0x23, 0x37, 0xC0, 0xC8,
-	0x08, 0x48, 0xC1, 0x00, 0xC3,
-	0xFF, 0xFF, 0xC8,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-#else
+#ifdef AID_OPERATION_4_8_INCH
 static char panel_cond_aid_ref[] = {
 	0xF8,
 	0x19, 0x35, 0x00, 0x00, 0x00,
@@ -477,7 +316,6 @@ static char panel_cond_aid_ref[] = {
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
-#endif
 
 static char etc_cond_set3_aid_ref[] = {
 	0xD9,
@@ -488,6 +326,7 @@ static char etc_cond_set3_aid_ref[] = {
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
+#endif
 
 /*
  * Display On, Stand-by Off Command
@@ -537,11 +376,6 @@ static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds[] = {
 		sizeof(etc_cond_set7), etc_cond_set7},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 120,
 		sizeof(etc_cond_set8), etc_cond_set8},
-
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_set_zero), acl_set_zero},
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_on), acl_on}
 };
 /* For 4.8 inch */
 static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds_4_8[] = {
@@ -575,11 +409,6 @@ static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds_4_8[] = {
 		sizeof(etc_cond_set8_4_8), etc_cond_set8_4_8},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 		sizeof(elvss_cond_set), elvss_cond_set},
-
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_set_zero), acl_set_zero},
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_on), acl_on}
 };
 
 static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds_4_8_fast[] = {
@@ -614,9 +443,6 @@ static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds_4_8_fast[] = {
 		sizeof(etc_cond_set8_4_8), etc_cond_set8_4_8},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 		sizeof(elvss_cond_set), elvss_cond_set},
-
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_set_zero), acl_set_zero},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 		sizeof(acl_on), acl_on},
 /* Will be initialized dyanamically from prepare_fast_init_cmd_array()*/
@@ -663,9 +489,6 @@ static struct dsi_cmd_desc samsung_panel_ready_to_on_cmds_fast[] = {
 		sizeof(etc_cond_set7), etc_cond_set7},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 		sizeof(etc_cond_set8), etc_cond_set8},
-
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_set_zero), acl_set_zero},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 		sizeof(acl_on), acl_on},
 /* Will be initialized dyanamically from prepare_fast_init_cmd_array()*/
@@ -739,31 +562,6 @@ static char ACL_COND_SET_50[] = {
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
-#if defined(CONFIG_MACH_STRETTO)
-static char ACL_COND_SET_40[] = {
-	0xC1,
-	0x47, 0x53, 0x13, 0x53, 0x00, 0x00,
-	0x02, 0xCF, 0x00, 0x00, 0x04, 0xFF,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x01, 0x07, 0x0D, 0x12, 0x18, 0x1E,
-	0x24, 0x2A, 0x2F, 0x35, 0x3B,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
-static char ACL_COND_SET_40[] = {
-	0xC1,
-	0x47, 0x53, 0x13, 0x53, 0x00, 0x00,
-	0x02, 0xCF, 0x00, 0x00, 0x04, 0xFF,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x01, 0x07, 0x0D, 0x12, 0x18, 0x1E,
-	0x24, 0x2A, 0x2F, 0x35, 0x3B,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
-#else
 static char ACL_COND_SET_40[] = {
 	0xC1,
 	0x47, 0x53, 0x13, 0x53, 0x00, 0x00,
@@ -775,25 +573,12 @@ static char ACL_COND_SET_40[] = {
 	0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00,
 };
-#endif
-static char ACL_COND_SET_33[] = {
-	0xC1,
-	0x47, 0x53, 0x13, 0x53, 0x00, 0x00,
-	0x02, 0xCF, 0x00, 0x00, 0x04, 0xFF,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x01, 0x06, 0x0A, 0x0F, 0x14, 0x19,
-	0x1D, 0x22, 0x27, 0x2B, 0x30,
-	/* adding 8 byte padding*/
-	0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00,
-};
+
 
 static struct dsi_cmd_desc DSI_CMD_ACL_50 = {
 DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(ACL_COND_SET_50), ACL_COND_SET_50 };
 static struct dsi_cmd_desc DSI_CMD_ACL_40 = {
 DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(ACL_COND_SET_40), ACL_COND_SET_40 };
-static struct dsi_cmd_desc DSI_CMD_ACL_33 = {
-DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(ACL_COND_SET_33), ACL_COND_SET_33 };
 
 static struct dsi_cmd_desc_LCD lcd_acl_table[] = {
 	{0, "20", NULL},
@@ -829,8 +614,8 @@ static struct dsi_cmd_desc_LCD lcd_acl_table[] = {
 
 static struct dsi_cmd_desc_LCD lcd_acl_table_4_8[] = {
 	{0, "20", NULL},
-	{33, "30", &DSI_CMD_ACL_33},
-	{40, "40", &DSI_CMD_ACL_40},
+	{0, "30", NULL},
+	{0, "40", NULL},
 	{40, "50", &DSI_CMD_ACL_40},
 	{40, "60", &DSI_CMD_ACL_40},
 	{40, "70", &DSI_CMD_ACL_40},
@@ -856,15 +641,13 @@ static struct dsi_cmd_desc_LCD lcd_acl_table_4_8[] = {
 	{40, "270", &DSI_CMD_ACL_40},
 	{40, "280", &DSI_CMD_ACL_40},
 	{40, "290", &DSI_CMD_ACL_40},
-	{40, "300", &DSI_CMD_ACL_40},
+	{50, "300", &DSI_CMD_ACL_50},
 };
 
 
 static struct dsi_cmd_desc samsung_panel_acl_on_cmds[] = {
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_set_zero), acl_set_zero},
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(acl_on), acl_on}
+		sizeof(acl_on), acl_on},
 };
 
 static struct dsi_cmd_desc samsung_panel_acl_off_cmds[] = {
@@ -1090,7 +873,7 @@ static int get_candela_index(int bl_level)
 		backlightlevel = GAMMA_250CD;
 		break;
 	case 255:
-		if (mipi_pd.msd->dstat.auto_brightness > 0)
+		if (mipi_pd.msd->dstat.auto_brightness == 1)
 			backlightlevel = GAMMA_300CD;
 		else
 			backlightlevel = GAMMA_250CD;
@@ -1107,14 +890,12 @@ static struct dsi_cmd_desc combined_ctrl[] = {
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 	 sizeof(oled_gamma_7500K), oled_gamma_7500K}
 	,
-#ifdef AID_OPERATION_4_8_INCH
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 	 sizeof(panel_cond_aid_ref), panel_cond_aid_ref}
 	,
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 	 sizeof(etc_cond_set3_aid_ref), etc_cond_set3_aid_ref}
 	,
-#endif
 	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
 	 sizeof(gamma_set_update), gamma_set_update}
 	,
@@ -1134,15 +915,8 @@ static int set_acl_on_level(int bl_level)
 	int cd;
 	cd = get_candela_index(bl_level);
 
-	if (Is_4_65LCD_cmc() || Is_4_65LCD_bypass()) { /*4.65 LCD_ID*/
-		if (!lcd_acl_table[cd].lux)
-			return 1;
-
-		samsung_panel_acl_update_cmds[0].dlen =
-		    lcd_acl_table[cd].cmd->dlen;
-		samsung_panel_acl_update_cmds[0].payload =
-		    lcd_acl_table[cd].cmd->payload;
-	} else { /*4.8 LCD_ID*/
+	if ((LCD_Get_Value() == 0x20) || bypass_LCD_Id() == 0x20 ||\
+		(LCD_Get_Value() == 0x40)) {
 		if (!lcd_acl_table_4_8[cd].lux)
 			return 1;
 
@@ -1150,7 +924,22 @@ static int set_acl_on_level(int bl_level)
 		    lcd_acl_table_4_8[cd].cmd->dlen;
 		samsung_panel_acl_update_cmds[0].payload =
 		    lcd_acl_table_4_8[cd].cmd->payload;
+	} else {
+		if (!lcd_acl_table[cd].lux)
+			return 1;
+
+		samsung_panel_acl_update_cmds[0].dlen =
+		    lcd_acl_table[cd].cmd->dlen;
+		samsung_panel_acl_update_cmds[0].payload =
+		    lcd_acl_table[cd].cmd->payload;
 	}
+	if (!lcd_acl_table_4_8[cd].lux)
+		return 1;
+
+	samsung_panel_acl_update_cmds[0].dlen =
+	    lcd_acl_table_4_8[cd].cmd->dlen;
+	samsung_panel_acl_update_cmds[0].payload =
+	    lcd_acl_table_4_8[cd].cmd->payload;
 	return 0;
 }
 
@@ -1264,39 +1053,23 @@ static int  aid_operation(int lux)
 	char etc_cond_set3_aid_ref_9 = etc_cond_set3_aid_ref[9];
 	int no_change = 0;
 
-	if (Is_4_65LCD_cmc() || Is_4_65LCD_bypass()) { /*4.65 LCD_ID*/
-		memcpy(panel_cond_aid_ref,
-				panel_cond_set, sizeof(panel_cond_set));
-		memcpy(etc_cond_set3_aid_ref,
-				etc_cond_set3, sizeof(etc_cond_set3));
-		pr_info("%s LCD is 4.65 inch", __func__);
-	} else {/* 4.8 LCD_ID*/
+	if ((LCD_Get_Value() == 0x20) || (bypass_LCD_Id() == 0x20) ||\
+		(LCD_Get_Value() == 0x40)) {
+		/*4.8 LCD_ID*/
 		if (lux == 0) {
-#if defined(CONFIG_MACH_K2_KDI)
-			panel_cond_aid_ref[1] = 0x3D;
-#else
 			panel_cond_aid_ref[1] = 0x19;
-#endif
 			panel_cond_aid_ref[18] = 0x04;
 			etc_cond_set3_aid_ref[9] = 0x40;
 			aid_status = 0;
 		} else if (lux >= 190) {
-#if defined(CONFIG_MACH_K2_KDI)
-			panel_cond_aid_ref[1] = 0x3D;
-#else
 			panel_cond_aid_ref[1] = 0x19;
-#endif
 			panel_cond_aid_ref[18] = 0x04;
 			etc_cond_set3_aid_ref[9] = 0xC0;
 			aid_status = 0;
 		} else if (lux >= 110) {
 			ratio = aid_below_110_ratio_table[9][1];
 
-#if defined(CONFIG_MACH_K2_KDI)
-			panel_cond_aid_ref[1] = 0x3D;
-#else
 			panel_cond_aid_ref[1] = 0x59;
-#endif
 			panel_cond_aid_ref[18] = ratio;
 			etc_cond_set3_aid_ref[9] = 0xC0;
 			aid_status = 1;
@@ -1304,18 +1077,51 @@ static int  aid_operation(int lux)
 			index = (lux / 10) - 2;
 			ratio = aid_below_110_ratio_table[index][1];
 
-#if defined(CONFIG_MACH_K2_KDI)
-			panel_cond_aid_ref[1] = 0x3D;
-#else
 			panel_cond_aid_ref[1] = 0x59;
-#endif
 			panel_cond_aid_ref[18] = ratio;
 			etc_cond_set3_aid_ref[9] = 0xC0;
 			aid_status = 1;
 		}
 		pr_debug("%s brightness_level : %d adi_status:%d", __func__,
 			lux, aid_status);
+	} else {
+		/* 4.65 LCD_ID*/
+		memcpy(panel_cond_aid_ref,
+				panel_cond_set, sizeof(panel_cond_set));
+		memcpy(etc_cond_set3_aid_ref,
+				etc_cond_set3, sizeof(etc_cond_set3));
+		pr_info("%s LCD is 4.65 inch", __func__);
 	}
+	/*4.8 LCD_ID*/
+	if (lux == 0) {
+		panel_cond_aid_ref[1] = 0x19;
+		panel_cond_aid_ref[18] = 0x04;
+		etc_cond_set3_aid_ref[9] = 0x40;
+		aid_status = 0;
+	} else if (lux >= 190) {
+		panel_cond_aid_ref[1] = 0x19;
+		panel_cond_aid_ref[18] = 0x04;
+		etc_cond_set3_aid_ref[9] = 0xC0;
+		aid_status = 0;
+	} else if (lux >= 110) {
+		ratio = aid_below_110_ratio_table[9][1];
+
+		panel_cond_aid_ref[1] = 0x59;
+		panel_cond_aid_ref[18] = ratio;
+		etc_cond_set3_aid_ref[9] = 0xC0;
+		aid_status = 1;
+	} else {
+		index = (lux / 10) - 2;
+		ratio = aid_below_110_ratio_table[index][1];
+
+		panel_cond_aid_ref[1] = 0x59;
+		panel_cond_aid_ref[18] = ratio;
+		etc_cond_set3_aid_ref[9] = 0xC0;
+		aid_status = 1;
+	}
+	pr_debug("%s brightness_level : %d adi_status:%d", __func__,
+		lux, aid_status);
+
 	no_change = (panel_cond_aid_ref_1 == panel_cond_aid_ref[1])
 		&& (panel_cond_aid_ref_18 == panel_cond_aid_ref[18])
 		&& (etc_cond_set3_aid_ref_9 == etc_cond_set3_aid_ref[9]);
@@ -1336,7 +1142,7 @@ static int set_gamma_level(int bl_level, enum gamma_mode_list gamma_mode)
 	if (mipi_pd.lcd_current_cd_idx == cd) {
 		pr_debug("mipi_pd.lcd_current_cd_idx :%d cd:%d bl_level:%d\n",
 			mipi_pd.lcd_current_cd_idx, cd, bl_level);
-		return -1;
+		return -EINVAL;
 	} else
 	    mipi_pd.lcd_current_cd_idx = cd;
 
@@ -1376,7 +1182,7 @@ static int set_gamma_level(int bl_level, enum gamma_mode_list gamma_mode)
 		pr_debug("SD: %03d %s\n", gamma_lux, pBuffer);
 		pr_info("bl_level:%d,cd:%d:Candela:%d aid_change:%d\n",
 			bl_level, cd, gamma_lux, aid_change);
-	}
+		}
 	return aid_change;
 }
 
@@ -1389,7 +1195,7 @@ static void  prepare_fast_init_cmd_array(int lcd_type)
 		return;
 	}
 
-	if (lcd_type == 0x20 || lcd_type == 0x40 || lcd_type == 0x60) {
+	if (lcd_type == 0x20 || lcd_type == 0x40) {
 		samsung_panel_ready_to_on_cmds_4_8_fast[FAST_INIT_MAX_CMDS-1]
 			.payload = samsung_panel_acl_update_cmds[0].payload;
 		samsung_panel_ready_to_on_cmds_4_8_fast[FAST_INIT_MAX_CMDS-1]
@@ -1412,10 +1218,10 @@ static int prepare_brightness_control_cmd_array(int lcd_type, int bl_level)
 	aid_change = set_gamma_level(bl_level,
 				mipi_pd.msd->dstat.gamma_mode);
 	if (aid_change < 0)
-		return -1;
+		return -EINVAL;
 	/* Prepare the list */
 	cmds_send_flag |= aid_change << 0;
-	if (lcd_type == 0x20 || lcd_type == 0x40 || lcd_type == 0x60) {
+	if (lcd_type == 0x20 || lcd_type == 0x40) {
 		if (!set_elvss_level_4_8(bl_level))
 			cmds_send_flag |= 1<<1;
 	} else {
@@ -1441,31 +1247,10 @@ static int prepare_brightness_control_cmd_array(int lcd_type, int bl_level)
 					cmds_send_flag |= 1<<4;
 		}
 	}
-
-	if (cmds_send_flag & 0x4) { /* acl off */
-
-		combined_ctrl[cmd_size].payload = acl_off;
-		combined_ctrl[cmd_size].dlen = sizeof(acl_off);
-		cmd_size++;
-	}
-
-	if (cmds_send_flag & 0x10) { /* acl update */
-
-		combined_ctrl[cmd_size].payload =
-			samsung_panel_acl_update_cmds[0].payload;
-		combined_ctrl[cmd_size].dlen =
-			samsung_panel_acl_update_cmds[0].dlen;
-		cmd_size++;
-	}
-
 	combined_ctrl[cmd_size].payload =
 		samsung_panel_gamma_update_cmds[0].payload;
 	combined_ctrl[cmd_size].dlen =
 		samsung_panel_gamma_update_cmds[0].dlen;
-	cmd_size++;
-
-	combined_ctrl[cmd_size].payload = gamma_set_update;
-	combined_ctrl[cmd_size].dlen = sizeof(gamma_set_update);
 	cmd_size++;
 
 	if (cmds_send_flag & 0x1) {
@@ -1478,6 +1263,9 @@ static int prepare_brightness_control_cmd_array(int lcd_type, int bl_level)
 		combined_ctrl[cmd_size].dlen = sizeof(etc_cond_set3_aid_ref);
 		cmd_size++;
 	}
+	combined_ctrl[cmd_size].payload = gamma_set_update;
+	combined_ctrl[cmd_size].dlen = sizeof(gamma_set_update);
+	cmd_size++;
 
 	if (cmds_send_flag & 0x2) { /* elvss change */
 
@@ -1487,7 +1275,26 @@ static int prepare_brightness_control_cmd_array(int lcd_type, int bl_level)
 			samsung_panel_elvss_update_cmds[0].dlen;
 		cmd_size++;
 	}
+	if (cmds_send_flag & 0x4) { /* acl off */
 
+		combined_ctrl[cmd_size].payload = acl_off;
+		combined_ctrl[cmd_size].dlen = sizeof(acl_off);
+		cmd_size++;
+	}
+	if (cmds_send_flag & 0x8) { /* acl on */
+
+		combined_ctrl[cmd_size].payload = acl_on;
+		combined_ctrl[cmd_size].dlen = sizeof(acl_on);
+		cmd_size++;
+	}
+	if (cmds_send_flag & 0x10) { /* acl update */
+
+		combined_ctrl[cmd_size].payload =
+			samsung_panel_acl_update_cmds[0].payload;
+		combined_ctrl[cmd_size].dlen =
+			samsung_panel_acl_update_cmds[0].dlen;
+		cmd_size++;
+	}
 	mipi_pd.combined_ctrl.size = cmd_size;
 	return cmds_send_flag;
 }
@@ -1563,10 +1370,12 @@ static struct mipi_dsi_phy_ctrl dsi_video_mode_phy_db = {
 	 0x00, 0x14, 0x03, 0x00, 0x02, 0x00, 0x20, 0x00, 0x01},
 };
 
+
 static int __init mipi_cmd_samsung_oled_qhd_pt_init(void)
 {
 	int ret;
 
+	printk(KERN_DEBUG "[lcd] mipi_cmd_samsung_oled_qhd_pt_init start\n");
 
 #ifdef CONFIG_FB_MSM_MIPI_PANEL_DETECT
 	if (msm_fb_detect_client("mipi_cmd_samsung_oled_qhd"))
@@ -1574,51 +1383,40 @@ static int __init mipi_cmd_samsung_oled_qhd_pt_init(void)
 #endif
 	pinfo.xres = 720;
 	pinfo.yres = 1280;
-	pinfo.height = 106;
-	pinfo.width = 60;
 	pinfo.mode2_xres = 0;
 	pinfo.mode2_yres = 0;
 	pinfo.mode2_bpp = 0;
+	/*
+	 *
+	 * Panel's Horizontal input timing requirement is to
+	 * include dummy(pad) data of 200 clk in addition to
+	 * width and porch/sync width values
+	 */
 
 	pinfo.type = MIPI_VIDEO_PANEL;
 	pinfo.pdest = DISPLAY_1;
 	pinfo.wait_cycle = 0;
 	pinfo.bpp = 24;
 
-	if (samsung_has_cmc624()) {
-		pinfo.lcdc.h_front_porch = 158;
-		pinfo.lcdc.h_back_porch = 160;
-	} else {
-		pinfo.lcdc.h_front_porch = 278;
-		pinfo.lcdc.h_back_porch = 30;
-	}
+	pinfo.lcdc.h_back_porch = 175;
+	pinfo.lcdc.h_front_porch = 173;
 
 	pinfo.lcdc.h_pulse_width = 2;
-
 	pinfo.lcdc.v_back_porch = 2;
-
-	if (samsung_has_cmc624())
-		pinfo.lcdc.v_front_porch = 13;
-	else
-		pinfo.lcdc.v_front_porch = 53;
+	pinfo.lcdc.v_front_porch = 13;
 	pinfo.lcdc.v_pulse_width = 1;
 	pinfo.lcdc.border_clr = 0;	/* blk */
-	pinfo.lcdc.underflow_clr = 0x0;	/* blue => black */
+	pinfo.lcdc.underflow_clr = 0xff;	/* blue */
 	pinfo.lcdc.hsync_skew = 0;
+
+	pinfo.lcdc.xres_pad = 0;
+	pinfo.lcdc.yres_pad = 0;
+
 	pinfo.bl_max = 255;
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
 
-	if (samsung_has_cmc624())
-		pinfo.clk_rate = 483000000;
-	else
-#ifdef CONFIG_MIPI_CLK_500
-		pinfo.clk_rate = 500000000;
-#elif defined(CONFIG_MIPI_CLK_487)
-		pinfo.clk_rate = 487000000;
-#else
-		pinfo.clk_rate = 499500000;
-#endif
+	pinfo.clk_rate = 499000000;
 
 	pinfo.lcd.v_back_porch = pinfo.lcdc.v_back_porch;
 	pinfo.lcd.v_front_porch = pinfo.lcdc.v_front_porch;
@@ -1627,12 +1425,7 @@ static int __init mipi_cmd_samsung_oled_qhd_pt_init(void)
 	pinfo.mipi.mode = DSI_VIDEO_MODE;
 	pinfo.mipi.pulse_mode_hsa_he = TRUE;
 	pinfo.mipi.hfp_power_stop = TRUE;
-
-	if (samsung_has_cmc624())
-		pinfo.mipi.hbp_power_stop = TRUE;
-	else
-		pinfo.mipi.hbp_power_stop = FALSE;
-
+	pinfo.mipi.hbp_power_stop = TRUE;
 	pinfo.mipi.hsa_power_stop = TRUE;
 	pinfo.mipi.eof_bllp_power_stop = TRUE;
 	pinfo.mipi.bllp_power_stop = TRUE;
@@ -1651,29 +1444,22 @@ static int __init mipi_cmd_samsung_oled_qhd_pt_init(void)
 	pinfo.mipi.dma_trigger = DSI_CMD_TRIGGER_SW;
 	pinfo.mipi.frame_rate = 60;
 	pinfo.mipi.dsi_phy_db = &dsi_video_mode_phy_db;
-	pinfo.mipi.esc_byte_ratio = 4;
+	pinfo.mipi.force_clk_lane_hs = 1;
 
 	/*
 	*	To support NONE CMC & HAS CMC
 	*	some kind of parameter changing
 	*/
-	if (samsung_has_cmc624()) {
-		panel_cond_set_4_8[28] = 0x35;
-		panel_cond_aid_ref[28] = 0x35;
-		memcpy(display_cond_set, display_cond_set_cmc,
-					sizeof(display_cond_set));
-	} else {
-		panel_cond_set_4_8[28] = 0x37;
-		panel_cond_aid_ref[28] = 0x37;
-		memcpy(display_cond_set, display_cond_set_none_cmc,
-					sizeof(display_cond_set));
-	}
+	panel_cond_set_4_8[28] = 0x37;
+	panel_cond_aid_ref[28] = 0x37;
 
 	ret = mipi_samsung_device_register(&pinfo, MIPI_DSI_PRIM,
 						MIPI_DSI_PANEL_WVGA_PT,
 						&mipi_pd);
 	if (ret)
 		pr_err("%s: failed to register device!\n", __func__);
+
+	printk(KERN_DEBUG "[lcd] mipi_cmd_samsung_oled_qhd_pt_init end\n");
 
 	return ret;
 }

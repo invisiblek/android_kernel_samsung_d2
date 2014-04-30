@@ -47,7 +47,7 @@ static int fat_ioctl_set_attributes(struct file *file, u32 __user *user_attr)
 		goto out;
 
 	mutex_lock(&inode->i_mutex);
-	err = mnt_want_write(file->f_path.mnt);
+	err = mnt_want_write_file(file);
 	if (err)
 		goto out_unlock_inode;
 
@@ -111,7 +111,7 @@ static int fat_ioctl_set_attributes(struct file *file, u32 __user *user_attr)
 	fat_save_attrs(inode, attr);
 	mark_inode_dirty(inode);
 out_drop_write:
-	mnt_drop_write(file->f_path.mnt);
+	mnt_drop_write_file(file);
 out_unlock_inode:
 	mutex_unlock(&inode->i_mutex);
 out:
@@ -214,12 +214,12 @@ static int fat_file_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-int fat_file_fsync(struct file *filp, int datasync)
+int fat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync)
 {
 	struct inode *inode = filp->f_mapping->host;
 	int res, err;
 
-	res = generic_file_fsync(filp, datasync);
+	res = generic_file_fsync(filp, start, end, datasync);
 	err = sync_mapping_buffers(MSDOS_SB(inode->i_sb)->fat_inode->i_mapping);
 
 	return res ? res : err;
@@ -379,7 +379,7 @@ EXPORT_SYMBOL_GPL(fat_getattr);
 static int fat_sanitize_mode(const struct msdos_sb_info *sbi,
 			     struct inode *inode, umode_t *mode_ptr)
 {
-	mode_t mask, perm;
+	umode_t mask, perm;
 
 	/*
 	 * Note, the basic check is already done by a caller of
@@ -416,7 +416,7 @@ static int fat_sanitize_mode(const struct msdos_sb_info *sbi,
 
 static int fat_allow_set_time(struct msdos_sb_info *sbi, struct inode *inode)
 {
-	mode_t allow_utime = sbi->options.allow_utime;
+	umode_t allow_utime = sbi->options.allow_utime;
 
 	if (current_fsuid() != inode->i_uid) {
 		if (in_group_p(inode->i_gid))
@@ -462,6 +462,8 @@ int fat_setattr(struct dentry *dentry, struct iattr *attr)
 	 * sequence.
 	 */
 	if (attr->ia_valid & ATTR_SIZE) {
+		inode_dio_wait(inode);
+
 		if (attr->ia_size > inode->i_size) {
 			error = fat_cont_expand(inode, attr->ia_size);
 			if (error || attr->ia_valid == ATTR_SIZE)
@@ -494,8 +496,10 @@ int fat_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	if (attr->ia_valid & ATTR_SIZE) {
+		down_write(&MSDOS_I(inode)->truncate_lock);
 		truncate_setsize(inode, attr->ia_size);
 		fat_truncate_blocks(inode, attr->ia_size);
+		up_write(&MSDOS_I(inode)->truncate_lock);
 	}
 
 	setattr_copy(inode, attr);

@@ -27,14 +27,6 @@
 		.macro	writeb, ch, rb
 		mcr	p14, 0, \ch, c0, c5, 0
 		.endm
-#elif defined(CONFIG_CPU_V7)
-		.macro	loadsp, rb, tmp
-		.endm
-		.macro	writeb, ch, rb
-wait:		mrc	p14, 0, pc, c0, c1, 0
-		bcs	wait
-		mcr	p14, 0, \ch, c0, c5, 0
-		.endm
 #elif defined(CONFIG_CPU_XSCALE)
 		.macro	loadsp, rb, tmp
 		.endm
@@ -66,7 +58,7 @@ wait:		mrc	p14, 0, pc, c0, c1, 0
 		add	\rb, \rb, #0x00010000	@ Ser1
 #endif
 		.endm
-#elif defined(CONFIG_ARCH_S3C2410)
+#elif defined(CONFIG_ARCH_S3C24XX)
 		.macro loadsp, rb, tmp
 		mov	\rb, #0x50000000
 		add	\rb, \rb, #0x4000 * CONFIG_S3C_LOWLEVEL_UART_PORT
@@ -277,10 +269,11 @@ restart:	adr	r0, LC0
 		 * of RAM and hope for the best.
 		 */
 		cmp	r0, #1
-		sub	r0, r4, #(TEXT_OFFSET - 0x100)
+		sub	r0, r4, #TEXT_OFFSET
+		add	r0, r0, #0x100
 		mov	r1, r6
 		sub	r2, sp, r6
-		blne	atags_to_fdt
+		bleq	atags_to_fdt
 
 		ldmfd	sp!, {r0-r3, ip, lr}
 		sub	sp, sp, #0x10000
@@ -397,8 +390,11 @@ wont_overwrite:
  *   sp  = stack pointer
  */
 		orrs	r1, r0, r5
+#ifndef CONFIG_CRYPTO_FIPS
 		beq	not_relocated
-
+#else
+        beq not_relocated_copy
+#endif
 		add	r11, r11, r0
 		add	r12, r12, r0
 
@@ -411,6 +407,9 @@ wont_overwrite:
 		add	r2, r2, r0
 		add	r3, r3, r0
 
+#ifdef CONFIG_CRYPTO_FIPS
+        bl copy_compressed
+#endif
 		/*
 		 * Relocate all entries in the GOT table.
 		 * Bump bss entries to _edata + dtb size
@@ -468,7 +467,8 @@ not_relocated:	mov	r0, #0
 		mov	r0, #0			@ must be zero
 		mov	r1, r7			@ restore architecture number
 		mov	r2, r8			@ restore atags pointer
-		mov	pc, r4			@ call kernel
+ ARM(		mov	pc, r4	)		@ call kernel
+ THUMB(		bx	r4	)		@ entry point is always ARM
 
 		.align	2
 		.type	LC0, #object
@@ -488,6 +488,46 @@ params:		ldr	r0, =0x10000100		@ params_phys for RPC
 		mov	pc, lr
 		.ltorg
 		.align
+#endif
+
+/*
+ * change@ksingh.sra-dallas - Copying the zImage to a secure location 
+ * this copy will be used to computer integrity for FIPS validation
+ */
+#ifdef CONFIG_CRYPTO_FIPS
+not_relocated_copy:
+		bl copy_compressed
+		b not_relocated
+
+copy_compressed:
+		// preserve the registers
+		PUSH {r1, r2, r4, r8, r9, r10}
+
+		// source address - zImage load address
+		movw r1, #:lower16:FIPS_KERNEL_RAM_BASE
+		movt r1, #:upper16:FIPS_KERNEL_RAM_BASE
+
+		// destination address - location where zImage copy will be made
+		movw r9, #:lower16:CONFIG_CRYPTO_FIPS_INTEG_COPY_ADDRESS
+	        movt r9, #:upper16:CONFIG_CRYPTO_FIPS_INTEG_COPY_ADDRESS
+
+1:
+		// makes the copy of zImage
+		ldmia	r1!, {r10}
+		stmia	r9!, {r10}
+		cmp	r1, r2
+		blo	1b
+
+		// copy the padded hash of zImage
+		.rept 8
+		ldmia	r1!, {r10}
+		stmia	r9!, {r10}
+		.endr
+
+		// restore the registers
+		POP {r1, r2, r4, r8, r9, r10}
+		// go back to where we came from
+		mov	pc, lr
 #endif
 
 /*
@@ -670,6 +710,7 @@ __armv7_mmu_cache_on:
 		mcrne	p15, 0, r3, c2, c0, 0	@ load page table pointer
 		mcrne	p15, 0, r1, c3, c0, 0	@ load domain access control
 #endif
+		mcr	p15, 0, r0, c7, c5, 4	@ ISB
 		mcr	p15, 0, r0, c1, c0, 0	@ load control register
 		mrc	p15, 0, r0, c1, c0, 0	@ and read it back
 		mov	r0, #0

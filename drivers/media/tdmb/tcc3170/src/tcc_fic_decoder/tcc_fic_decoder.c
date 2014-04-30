@@ -537,3 +537,4 @@ struct tcc_ensemble_info *tcc_fic_get_ensbl_info(s32 _disp)
 
 	return &user_ensbl_info;
 }
+

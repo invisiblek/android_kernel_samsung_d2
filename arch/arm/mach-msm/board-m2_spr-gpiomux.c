@@ -19,6 +19,12 @@
 #include "board-8960.h"
 #include <mach/msm8960-gpio.h>
 
+extern unsigned int system_rev;
+
+#define GPIO_CAM_SPI_MOSI	38	
+#define GPIO_CAM_SPI_MISO	39
+#define GPIO_CAM_SPI_SSN	40
+#define GPIO_CAM_SPI_SCLK	41
 /* The SPI configurations apply to GSBI 1*/
 static struct gpiomux_setting spi_active = {
 	.func = GPIOMUX_FUNC_1,
@@ -336,6 +342,15 @@ struct msm_gpiomux_config msm8960_gpio_key_configs[] = {
 			[GPIOMUX_SUSPENDED] = &gpio_key_suspend_cfg,
 		}
 	},
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+	{
+		.gpio = 81,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &gpio_key_suspend_cfg,
+			[GPIOMUX_SUSPENDED] = &gpio_key_suspend_cfg,
+		},
+	},
+#endif
 };
 #ifdef CONFIG_VP_A2220
 static struct msm_gpiomux_config audience_suspend_configs[] __initdata = {
@@ -915,6 +930,41 @@ static struct msm_gpiomux_config msm8960_sec_sensor_configs[] = {
 		},
 	},
 };
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+static struct gpiomux_setting gpio_24_sda_config = {
+        .func = GPIOMUX_FUNC_GPIO,
+        .drv = GPIOMUX_DRV_2MA,
+        .pull = GPIOMUX_PULL_NONE,
+        .dir = GPIOMUX_IN,
+};
+
+static struct msm_gpiomux_config msm_sda_configs[] = {
+        {
+                .gpio = 24,
+                .settings = {
+                        [GPIOMUX_ACTIVE]    = &gpio_24_sda_config,
+                        [GPIOMUX_SUSPENDED] = &gpio_24_sda_config,
+                },
+        },
+};
+
+static struct gpiomux_setting gpio_52_wpc_config = {
+        .func = GPIOMUX_FUNC_GPIO,
+        .drv = GPIOMUX_DRV_2MA,
+        .pull = GPIOMUX_PULL_UP,
+        .dir = GPIOMUX_IN,
+};
+
+static struct msm_gpiomux_config msm_wpc_configs[] = {
+        {
+                .gpio = 52,
+                .settings = {
+                        [GPIOMUX_ACTIVE]    = &gpio_52_wpc_config,
+                        [GPIOMUX_SUSPENDED] = &gpio_52_wpc_config,
+                },
+        },
+};
+#endif
 
 int __init msm8960_init_gpiomux(void)
 {
@@ -927,6 +977,13 @@ int __init msm8960_init_gpiomux(void)
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
 	msm_gpiomux_install(msm8960_ethernet_configs,
 			ARRAY_SIZE(msm8960_ethernet_configs));
+#endif
+
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+        msm_gpiomux_install(msm_sda_configs,
+                        ARRAY_SIZE(msm_sda_configs));
+        msm_gpiomux_install(msm_wpc_configs,
+                        ARRAY_SIZE(msm_wpc_configs));
 #endif
 
 	msm_gpiomux_install(msm8960_gsbi_configs,

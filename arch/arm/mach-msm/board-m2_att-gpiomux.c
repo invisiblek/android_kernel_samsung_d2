@@ -18,7 +18,12 @@
 #include "devices.h"
 #include "board-8960.h"
 #include <mach/msm8960-gpio.h>
+#include <asm/system_info.h>
 
+#define GPIO_CAM_SPI_MOSI	38	
+#define GPIO_CAM_SPI_MISO	39
+#define GPIO_CAM_SPI_SSN	40
+#define GPIO_CAM_SPI_SCLK	41
 /* The SPI configurations apply to GSBI 1*/
 static struct gpiomux_setting spi_active = {
 	.func = GPIOMUX_FUNC_1,

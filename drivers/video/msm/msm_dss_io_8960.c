@@ -47,8 +47,6 @@
 #define SW_RESET_PLL BIT(0)
 #define PWRDN_B BIT(7)
 
-void mipi_dsi_phy_rdy_poll(void);
-
 /* multimedia sub system clock control */
 char *mmss_cc_base = MSM_MMSS_CLK_CTL_BASE;
 /* multimedia sub system sfpb */
@@ -321,10 +319,6 @@ void mipi_dsi_phy_rdy_poll(void)
 		i++;
 		if (i > term_cnt) {
 			pr_err("DSI1 PHY NOT READY, exceeded polling TIMEOUT!\n");
-			/*adding Fatal error to check proper stack*/
-			#if defined(CONFIG_MACH_JAGUAR)
-			panic("mipi_dsi_phy_rdy_poll_timeout!!!\n");
-			#endif
 			break;
 		}
 		phy_pll_busy = MIPI_INP(MIPI_DSI_BASE + 0x280);
@@ -373,6 +367,90 @@ int mipi_dsi_phy_pll_config(u32 clk_rate)
 
 	return 0;
 }
+#if 0
+void mipi_dsi_configure_dividers(int fps)
+{
+	struct dsiphy_pll_divider_config *dividers;
+	u32 tmp;
+     
+	dividers = &pll_divider_config;
+   
+	if(fps == 60) {
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x20C);
+		tmp &= ~0x3f;
+		tmp |= (dividers->ref_divider_ratio- 1) & 0x3f;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x20C, tmp);
+
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x22C);
+		tmp &= ~0x10;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x22C, tmp);
+			
+		wmb();
+	} else if(fps == 45) {
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x20C);
+		tmp &= ~0x3f;
+		tmp |= ((dividers->ref_divider_ratio+1)- 1) & 0x3f;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x20C, tmp);
+
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x22C);
+		tmp &= ~0x10;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x22C, tmp);
+					
+		 wmb();
+	} else if(fps == 30) {
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x22C);
+		tmp |= 0x10;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x22C, tmp);
+
+
+		tmp = MIPI_INP(MIPI_DSI_BASE + 0x20C);
+		tmp &= ~0x3f;
+		tmp |= ((dividers->ref_divider_ratio*2)- 1) & 0x3f;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x20C, tmp);
+
+		wmb();
+	} else {
+		pr_info("Invalid fps value\n");
+	}
+}
+#endif
+static int current_fps = 60; 
+void mipi_dsi_configure_dividers(int fps) 
+{
+	u32 fb_divider, rate, vco;
+	u32 div_ratio = 0;
+	struct dsiphy_pll_divider_config *dividers;
+
+	dividers = &pll_divider_config;
+	
+	if(fps >= 42 && fps <= 60)
+	{
+		rate = dividers->clk_rate / 1000000; /* In Mhz */
+		
+		if (rate < 125) {
+			vco = rate * 8;
+			div_ratio = 8;
+		} else if (rate < 250) {
+			vco = rate * 4;
+			div_ratio = 4;
+		} else if (rate < 600) {
+			vco = rate * 2;
+			div_ratio = 2;
+		} else {
+			vco = rate * 1;
+			div_ratio = 1;
+		}
+
+		fb_divider = ((vco * fps * PREF_DIV_RATIO) / (27 * current_fps));
+		fb_divider = (fb_divider/2) - 1;
+		MIPI_OUTP(MIPI_DSI_BASE + 0x204, fb_divider & 0xff);
+		wmb();
+	}
+	else
+	{
+		printk("Invalid fps value\n");
+	}
+} 
 
 int mipi_dsi_clk_div_config(uint8 bpp, uint8 lanes,
 			    uint32 *expected_dsi_pclk)
@@ -578,9 +656,7 @@ void mipi_dsi_phy_init(int panel_ndx, struct msm_panel_info const *panel_info,
 		off += 4;
 	}
 
-	if (!panel_info)
-		pr_err("%s: panel_info not initialized\n", __func__);
-	else
+	if (panel_info)
 		mipi_dsi_phy_pll_config(panel_info->clk_rate);
 
 	/* pll ctrl 0 */
@@ -617,6 +693,8 @@ void mipi_dsi_prepare_clocks(void)
 	clk_prepare(amp_pclk);
 	clk_prepare(dsi_m_pclk);
 	clk_prepare(dsi_s_pclk);
+	clk_set_rate(dsi_byte_div_clk, 1);
+	clk_set_rate(dsi_esc_clk, 1);
 	clk_prepare(dsi_byte_div_clk);
 	clk_prepare(dsi_esc_clk);
 }
@@ -666,13 +744,12 @@ void mipi_dsi_clk_enable(void)
 	MIPI_OUTP(MIPI_DSI_BASE + 0x0200, pll_ctrl | 0x01);
 	mipi_dsi_phy_rdy_poll();
 
-	if (clk_set_rate(dsi_byte_div_clk, 1) < 0)/* divided by 1 */
+	if (clk_set_rate(dsi_byte_div_clk, 1) < 0)	/* divided by 1 */
 		pr_err("%s: dsi_byte_div_clk - "
 			"clk_set_rate failed\n", __func__);
 	if (clk_set_rate(dsi_esc_clk, esc_byte_ratio) < 0) /* divided by esc */
 		pr_err("%s: dsi_esc_clk - "			 /* clk ratio */
 			"clk_set_rate failed\n", __func__);
-
 	mipi_dsi_pclk_ctrl(&dsi_pclk, 1);
 	mipi_dsi_clk_ctrl(&dsicore_clk, 1);
 	clk_enable(dsi_byte_div_clk);
@@ -788,7 +865,7 @@ void hdmi_msm_powerdown_phy(void)
 	HDMI_OUTP_ND(HDMI_PHY_REG_2, 0x7F); /*0b01111111*/
 }
 
-void hdmi_frame_ctrl_cfg(const struct hdmi_disp_mode_timing_type *timing)
+void hdmi_frame_ctrl_cfg(const struct msm_hdmi_mode_timing_info *timing)
 {
 	/*  0x02C8 HDMI_FRAME_CTRL
 	 *  31 INTERLACED_EN   Interlaced or progressive enable bit

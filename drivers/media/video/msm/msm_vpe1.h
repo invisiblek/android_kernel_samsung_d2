@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -100,9 +100,9 @@ enum VPE_CMD_ID_ENUM {
 };
 
 /* Length of each command.  In bytes.  (payload only) */
-#define VPE_OPERATION_MODE_CFG_LEN 8
+#define VPE_OPERATION_MODE_CFG_LEN_ZSL 8
 #define VPE_INPUT_PLANE_CFG_LEN    24
-#define VPE_OUTPUT_PLANE_CFG_LEN   20
+#define VPE_OUTPUT_PLANE_CFG_LEN_ZSL   20
 #define VPE_INPUT_PLANE_UPDATE_LEN 12
 #define VPE_SCALER_CONFIG_LEN      260
 #define VPE_DIS_OFFSET_CFG_LEN     12
@@ -212,9 +212,8 @@ struct vpe_msg_stats{
 
 struct vpe_msg_output {
 	uint8_t   output_id;
-	uint32_t  p0_Buffer;
-	uint32_t  p1_Buffer;
-	uint32_t  p2_Buffer;
+	uint32_t  yBuffer;
+	uint32_t  cbcrBuffer;
 	uint32_t  frameCounter;
 };
 
@@ -251,4 +250,3 @@ void msm_vpe_offset_update(int frame_pack, uint32_t pyaddr, uint32_t pcbcraddr,
 	struct timespec *ts, int output_id, struct msm_st_half st_half,
 	int frameid);
 #endif /*_msm_vpe1_h_*/
-

@@ -9,35 +9,31 @@
  *
  */
 
-#if defined(CONFIG_MACH_JAGUAR)
-#define BIN_FW_VERSION		0x06
+#if defined(CONFIG_BOARD_JF_REFRESH)
+#define BIN_FW_VERSION		0x1B
+#define BASE_FW_VERSION	0x01
 #ifdef _CYPRESS_TKEY_FW_H
-#include "jaguar_tkey_fw.h"
+#include "fusion3_jf_refresh_tkey_fw.h"
 #endif
-
-#elif defined(CONFIG_MACH_M2_ATT) || defined(CONFIG_MACH_M2_VZW) \
-	|| defined(CONFIG_MACH_M2_SPR) || defined(CONFIG_MACH_M2_DCM) \
-	|| defined(CONFIG_MACH_M2_SKT) || defined(CONFIG_MACH_K2_KDI)
+#elif defined(CONFIG_MACH_JF_VZW) || defined(CONFIG_MACH_JF_SPR) || defined(CONFIG_MACH_JF_USC) || defined(CONFIG_MACH_JF_CRI)
+#define BIN_FW_VERSION		0x1A
+#define BASE_FW_VERSION		0x01
+#ifdef _CYPRESS_TKEY_FW_H
+#include "fusion3_cdma_tkey_fw.h"
+#endif
+#elif defined(CONFIG_SEC_PRODUCT_8960)
 #define BIN_FW_VERSION		0x06
 #ifdef _CYPRESS_TKEY_FW_H
 #include "d2_tkey_fw.h"
 #endif
-
-#elif defined(CONFIG_MACH_GOGH)
-#define BIN_FW_VERSION		0x0E
-#ifdef _CYPRESS_TKEY_FW_H
-#include "gogh_tkey_fw.h"
-#endif
-
-#elif defined(CONFIG_MACH_APEXQ)
-#define BIN_FW_VERSION		0x06
-#ifdef _CYPRESS_TKEY_FW_H
-#include "apexq_tkey_fw.h"
-#endif
-
 #else
-#define BIN_FW_VERSION		0x00
+#define BIN_FW_VERSION		0x10
+#define BASE_FW_VERSION		0x01
 #ifdef _CYPRESS_TKEY_FW_H
-unsigned char firmware_data[8192];
+#include "fusion3_tkey_fw.h"
 #endif
+#endif
+#define BIN_FW_VERSION_20055	0x0D
+#ifdef _CYPRESS_TKEY_FW_H
+#include "fusion3_tkey_fw_20055.h"
 #endif

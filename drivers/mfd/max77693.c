@@ -21,6 +21,7 @@
  * This driver is based on max8997.c
  */
 
+#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
@@ -29,6 +30,9 @@
 #include <linux/mfd/max77693.h>
 #include <linux/mfd/max77693-private.h>
 #include <linux/regulator/machine.h>
+
+#include <mach/sec_debug.h>
+#include <linux/mfd/pm8xxx/misc.h>
 
 #define I2C_ADDR_PMIC	(0xCC >> 1)	/* Charger, Flash LED */
 #define I2C_ADDR_MUIC	(0x4A >> 1)
@@ -50,8 +54,11 @@ int max77693_read_reg(struct i2c_client *i2c, u8 reg, u8 *dest)
 	mutex_lock(&max77693->iolock);
 	ret = i2c_smbus_read_byte_data(i2c, reg);
 	mutex_unlock(&max77693->iolock);
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(max77693->dev,
+			"%s, reg(0x%x), ret(%d)\n", __func__, reg, ret);
 		return ret;
+	}
 
 	ret &= 0xff;
 	*dest = ret;
@@ -81,6 +88,9 @@ int max77693_write_reg(struct i2c_client *i2c, u8 reg, u8 value)
 
 	mutex_lock(&max77693->iolock);
 	ret = i2c_smbus_write_byte_data(i2c, reg, value);
+	if (ret < 0)
+		dev_err(max77693->dev,
+			"%s, reg(0x%x), ret(%d)\n", __func__, reg, ret);
 	mutex_unlock(&max77693->iolock);
 	return ret;
 }
@@ -156,6 +166,26 @@ static int max77693_i2c_probe(struct i2c_client *i2c,
 		pr_info("%s: device found: rev.0x%x, ver.0x%x\n", __func__,
 				max77693->pmic_rev, max77693->pmic_ver);
 	}
+#if 0
+#if defined(CONFIG_MACH_JF_VZW) || defined(CONFIG_MACH_JF_LGT)
+	if (kernel_sec_get_debug_level() == KERNEL_SEC_DEBUG_LEVEL_LOW) {
+		pm8xxx_hard_reset_config(PM8XXX_DISABLE_HARD_RESET);
+		max77693_write_reg(i2c, MAX77693_PMIC_REG_MAINCTRL1, 0x04);
+	} else {
+		pm8xxx_hard_reset_config(PM8XXX_DISABLE_HARD_RESET);
+		max77693_write_reg(i2c, MAX77693_PMIC_REG_MAINCTRL1, 0x0c);
+	}
+#else
+	if (kernel_sec_get_debug_level() == KERNEL_SEC_DEBUG_LEVEL_LOW) {
+		max77693_write_reg(i2c, MAX77693_PMIC_REG_MAINCTRL1, 0x04);
+	} else {
+		pm8xxx_hard_reset_config(PM8XXX_DISABLE_HARD_RESET);
+		max77693_write_reg(i2c, MAX77693_PMIC_REG_MAINCTRL1, 0x0c);
+	}
+#endif
+
+#endif
+	max77693_update_reg(i2c, MAX77693_CHG_REG_SAFEOUT_CTRL, 0x00, 0x30);
 
 	max77693->muic = i2c_new_dummy(i2c->adapter, I2C_ADDR_MUIC);
 	i2c_set_clientdata(max77693->muic, max77693);
@@ -165,7 +195,7 @@ static int max77693_i2c_probe(struct i2c_client *i2c,
 
 	ret = max77693_irq_init(max77693);
 	if (ret < 0)
-		goto err_mfd;
+		goto err_irq_init;
 
 	ret = mfd_add_devices(max77693->dev, -1, max77693_devs,
 			ARRAY_SIZE(max77693_devs), NULL, 0);
@@ -178,6 +208,7 @@ static int max77693_i2c_probe(struct i2c_client *i2c,
 
 err_mfd:
 	mfd_remove_devices(max77693->dev);
+err_irq_init:
 	i2c_unregister_device(max77693->muic);
 	i2c_unregister_device(max77693->haptic);
 err:
@@ -212,8 +243,6 @@ static int max77693_suspend(struct device *dev)
 	if (device_may_wakeup(dev))
 		enable_irq_wake(max77693->irq);
 
-	disable_irq(max77693->irq);
-
 	return 0;
 }
 
@@ -224,8 +253,6 @@ static int max77693_resume(struct device *dev)
 
 	if (device_may_wakeup(dev))
 		disable_irq_wake(max77693->irq);
-
-	enable_irq(max77693->irq);
 
 	return max77693_irq_resume(max77693);
 }

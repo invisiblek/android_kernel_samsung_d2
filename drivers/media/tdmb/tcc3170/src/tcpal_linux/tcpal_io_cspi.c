@@ -55,6 +55,8 @@
 #define CONTINUOUS_MODE 0
 #define FIXED_MODE	  1
 
+#define RX_TX_BUF_ALIGNED
+
 #if defined(__CSPI_ONLY__)
 
 struct tcpal_cspi_data {
@@ -67,6 +69,13 @@ struct tcpal_cspi_data {
 
 static struct tcbd_io_data *tcbd_cspi_io_funcs;
 static struct tcpal_cspi_data tcpal_cspi_io_data;
+
+#if defined(RX_TX_BUF_ALIGNED)
+#include <linux/cache.h>
+#define RX_TX_BUFF_MAX DMA_MAX_SIZE*2
+u8 spi_rx_buff[RX_TX_BUFF_MAX] __cacheline_aligned;
+u8 spi_tx_buff[RX_TX_BUFF_MAX] __cacheline_aligned;
+#endif
 
 static u8 tcpal_calc_crc8(u8 *data, s32 len)
 {
@@ -159,13 +168,18 @@ static s32 tcpal_cspi_close(void)
 
 static s32 tcpal_cspi_open(void)
 {
-	s32 ret = 0;
 	struct tcpal_cspi_data *spi_data = &tcpal_cspi_io_data;
 
 	memset(&tcpal_cspi_io_data, 0, sizeof(tcpal_cspi_io_data));
 	memset(spi_data->buff_init_cmd, 0xFF, SPICMD_BUFF_LEN);
+#if defined(RX_TX_BUF_ALIGNED)
+    memset(spi_rx_buff, 0, RX_TX_BUFF_MAX);
+    memset(spi_tx_buff, 0, RX_TX_BUFF_MAX);
+#endif
 
 #ifdef __USE_TC_CPU__
+	s32 ret = 0;
+
 	spi_data->spi_dev = tcpal_find_cspi_device();
 
 	if (spi_data->spi_dev) {
@@ -245,9 +259,9 @@ static inline s32 tcpal_cspi_single_io(
 	buffer[2] = (_reg_addr & 0x03f) << 2 | 0x0;
 
 	if (_write_flag)
-		buffer[3] = _data[0];	 /* write */
+		buffer[3] = _data[0]; /* write */
 	else
-		buffer[3] = 0x0;		  /* null(8) */
+		buffer[3] = 0x0; /* null(8) */
 
 	buffer[4] = 0x00;
 
@@ -261,7 +275,7 @@ static inline s32 tcpal_cspi_single_io(
 	if (ret < 0)
 		return ret;
 
-	if (buffout[7] != SPICMD_ACK) {				 /* ack */
+	if (buffout[7] != SPICMD_ACK) { /* ack */
 		tcbd_debug(DEBUG_ERROR,
 			"# Single %s ACK error chip_addr:0x%X, regAddr:0x%X\n",
 			_write_flag ? "Write" : "Read",
@@ -290,10 +304,21 @@ static inline s32 tcpal_cspi_burst_io(
 	u8 _fixedMode)
 {
 	s32 ret = 0;
-	struct tcpal_cspi_data *spi_data = &tcpal_cspi_io_data;
 	u8 crc;
 	u8 *buffer;
 	u8 *buffout;
+
+#if defined(RX_TX_BUF_ALIGNED)
+	if (_write_flag == 0) {
+		buffer = spi_tx_buff;
+		buffout = spi_rx_buff;
+	} else {
+		memcpy(spi_tx_buff+SPICMD_BUFF_LEN, _data, _size);
+		buffer = spi_tx_buff;
+		buffout = spi_rx_buff;
+	}
+#else
+	struct tcpal_cspi_data *spi_data = &tcpal_cspi_io_data;
 
 	if (_write_flag == 0) {
 		buffer = spi_data->buff_dummy;
@@ -303,6 +328,8 @@ static inline s32 tcpal_cspi_burst_io(
 		buffer = spi_data->buff_rw;
 		buffout = spi_data->buff_dummy;
 	}
+#endif
+
 	memset(buffer+SPICMD_BUFF_LEN+_size, 0xFF, SPICMD_BUFF_LEN);
 
 	if (_size > DMA_MAX_SIZE)

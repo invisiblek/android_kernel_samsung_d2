@@ -746,7 +746,7 @@ static int mpu_set_slave_mpu60xx(struct mldl_cfg *mldl_cfg,
 		    0))
 		return 0;
 
-	result = mpu_set_i2c_bypass(mldl_cfg, gyro_handle, true);
+	mpu_set_i2c_bypass(mldl_cfg, gyro_handle, true);
 
 	/* Address */
 	result = inv_serial_single_write(gyro_handle,
@@ -942,7 +942,7 @@ static int mpu_set_slave(struct mldl_cfg *mldl_cfg,
  */
 static int mpu_was_reset(struct mldl_cfg *mldl_cfg, void *gyro_handle)
 {
-	int result = INV_SUCCESS;
+	int result;
 	unsigned char reg;
 
 	result = inv_serial_read(gyro_handle, mldl_cfg->mpu_chip_info->addr,
@@ -1124,7 +1124,7 @@ static int gyro_resume(struct mldl_cfg *mldl_cfg, void *gyro_handle,
 
 	reg = MPUREG_GYRO_CONFIG_VALUE(0, 0, 0,
 				       mldl_cfg->mpu_gyro_cfg->full_scale);
-	result = inv_serial_single_write(
+	inv_serial_single_write(
 		gyro_handle, mldl_cfg->mpu_chip_info->addr,
 		MPUREG_GYRO_CONFIG, reg);
 	reg = MPUREG_CONFIG_VALUE(mldl_cfg->mpu_gyro_cfg->ext_sync,
@@ -1409,7 +1409,7 @@ int inv_mpu_open(struct mldl_cfg *mldl_cfg,
 	mldl_cfg->mpu_gyro_cfg->int_config = BIT_DMP_INT_EN;
 	mldl_cfg->mpu_gyro_cfg->clk_src = MPU_CLK_SEL_PLLGYROZ;
 	mldl_cfg->mpu_gyro_cfg->lpf = MPU_FILTER_42HZ;
-	mldl_cfg->mpu_gyro_cfg->full_scale = MPU_FS_500DPS;
+	mldl_cfg->mpu_gyro_cfg->full_scale = MPU_FS_2000DPS;
 	mldl_cfg->mpu_gyro_cfg->divider = 4;
 	mldl_cfg->mpu_gyro_cfg->dmp_enable = 1;
 	mldl_cfg->mpu_gyro_cfg->fifo_enable = 1;

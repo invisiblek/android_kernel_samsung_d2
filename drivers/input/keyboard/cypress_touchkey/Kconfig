@@ -11,11 +11,4 @@ config KEYBOARD_CYPRESS_TOUCH
 	  To compile this driver as a
 	  module, choose M here.
 
-config KEYBOARD_CYPRESS_TOUCH_236
-        tristate "Cypress touchkey support"
-        default n
-        help
-          Say Y here to enable the
-	  cypress touchkey.
-          To compile this driver as a
-	  module, choose M here.
+

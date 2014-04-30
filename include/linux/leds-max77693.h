@@ -12,15 +12,8 @@
 #ifndef __LEDS_MAX77693_H__
 #define __LEDS_MAX77693_H__
 
-/* MAX77693_IFLASH1 */
-#define MAX77693_FLASH_IOUT1		0x3F
-
-/* MAX77693_IFLASH2 */
-#define MAX77693_FLASH_IOUT2		0x3F
-
-/* MAX77693_ITORCH */
-#define MAX77693_TORCH_IOUT1		0x0F
-#define MAX77693_TORCH_IOUT2		0xF0
+#define MAX77693_FLASH_IOUT		0x3F
+#define MAX77693_TORCH_IOUT		0x0F
 
 /* MAX77693_TORCH_TIMER */
 #define MAX77693_TORCH_TMR_DUR		0x0F
@@ -37,9 +30,7 @@
 #define MAX77693_FLASH_TMR_MDOE_MAXTIMER	0x01
 
 /* MAX77693_FLASH_EN */
-#define MAX77693_TORCH_FLED2_EN		0x03
 #define MAX77693_TORCH_FLED1_EN		0x0C
-#define MAX77693_FLASH_FLED2_EN		0x30
 #define MAX77693_FLASH_FLED1_EN		0xC0
 /* MAX77693_TORCH_FLEDx_EN value */
 #define MAX77693_TORCH_OFF		0x00
@@ -78,9 +69,7 @@
 
 enum max77693_led_id {
 	MAX77693_FLASH_LED_1,
-	MAX77693_FLASH_LED_2,
 	MAX77693_TORCH_LED_1,
-	MAX77693_TORCH_LED_2,
 	MAX77693_LED_MAX,
 };
 
@@ -145,14 +134,8 @@ struct max77693_led {
 };
 
 struct max77693_led_platform_data {
-	void (*hw_init) (void);
-	int torch_en;
-	int flash_en;
 	int num_leds;
 	struct max77693_led leds[MAX77693_LED_MAX];
-
-	struct device *led_dev;
-	struct class *led_class;
 };
 
 #endif

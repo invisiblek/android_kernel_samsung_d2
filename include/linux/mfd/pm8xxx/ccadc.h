@@ -23,7 +23,12 @@ struct pm8xxx_ccadc_core_data {
 
 /**
  * struct pm8xxx_ccadc_platform_data -
- * @r_sense:		sense resistor value in (mOhms)
+ * @ccadc_cdata:	core data for the ccadc driver containing channel info
+ * @r_sense_uohm:		sense resistor value in (micro Ohms)
+ * @calib_delay_ms:	how often should the adc calculate gain and offset
+ * @periodic_wakeup:	a flag to indicate that this system wakeups periodically
+ *			for calibration/other housekeeping activities. The ccadc
+ *			does a quick calibration while resuming
  */
 struct pm8xxx_ccadc_platform_data {
 	struct pm8xxx_ccadc_core_data	ccadc_cdata;
@@ -32,32 +37,13 @@ struct pm8xxx_ccadc_platform_data {
 	bool				periodic_wakeup;
 };
 
-#define CCADC_READING_RESOLUTION_N_V1	1085069
-#define CCADC_READING_RESOLUTION_D_V1	100000
-#define CCADC_READING_RESOLUTION_N_V2	542535
-#define CCADC_READING_RESOLUTION_D_V2	100000
-
-static s64 pm8xxx_ccadc_reading_to_microvolt_v1(s64 cc)
-{
-	return div_s64(cc * CCADC_READING_RESOLUTION_N_V1,
-					CCADC_READING_RESOLUTION_D_V1);
-}
-
-static s64 pm8xxx_ccadc_reading_to_microvolt_v2(s64 cc)
-{
-	return div_s64(cc * CCADC_READING_RESOLUTION_N_V2,
-					CCADC_READING_RESOLUTION_D_V2);
-}
+#define CCADC_READING_RESOLUTION_N	542535
+#define CCADC_READING_RESOLUTION_D	100000
 
 static inline s64 pm8xxx_ccadc_reading_to_microvolt(int revision, s64 cc)
 {
-	/*
-	 * resolution (the value of a single bit) was changed after revision 2.0
-	 * for more accurate readings
-	 */
-	return (revision < PM8XXX_REVISION_8921_2p0) ?
-				pm8xxx_ccadc_reading_to_microvolt_v1((s64)cc) :
-				pm8xxx_ccadc_reading_to_microvolt_v2((s64)cc);
+	return div_s64(cc * CCADC_READING_RESOLUTION_N,
+					CCADC_READING_RESOLUTION_D);
 }
 
 #if defined(CONFIG_PM8XXX_CCADC) || defined(CONFIG_PM8XXX_CCADC_MODULE)

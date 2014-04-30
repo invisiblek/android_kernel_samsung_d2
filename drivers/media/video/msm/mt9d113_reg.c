@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -450,6 +450,3 @@ struct mt9d113_reg mt9d113_regs = {
 		.eeprom_tbl = eeprom_settings,
 		.eeprom_tbl_size = ARRAY_SIZE(eeprom_settings),
 };
-
-
-

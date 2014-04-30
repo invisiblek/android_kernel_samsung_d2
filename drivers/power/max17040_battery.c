@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <asm/system_info.h>
 #ifdef CONFIG_SEC_DEBUG_FUELGAUGE_LOG
 #include <mach/sec_debug.h>
 #endif
@@ -308,7 +309,11 @@ static void max17040_get_soc(struct i2c_client *client)
 		(chip->batt_type == BATT_TYPE_D2_HIGH) ||
 		(chip->batt_type == BATT_TYPE_GOGH)) {
 		empty_soc = 150;
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+		full_soc = chip->full_soc;
+#else
 		full_soc = FULL_SOC_DEFAULT;
+#endif
 	} else if (chip->batt_type == BATT_TYPE_AEGIS2) {
 		empty_soc = 110;
 		full_soc = FULL_SOC_DEFAULT;
@@ -654,7 +659,11 @@ static void max17040_rcomp_update(struct i2c_client *client,
 				chip->pdata->rcomp_value = 0xa01d;
 		} else if (chip->batt_type == BATT_TYPE_D2_ACTIVE) {
 			if (chg_state == POWER_SUPPLY_STATUS_CHARGING)
+#if defined(CONFIG_MACH_M2_REFRESHSPR)
+				chip->pdata->rcomp_value = 0x801c;
+#else
 				chip->pdata->rcomp_value = 0x851c;
+#endif
 			else
 				chip->pdata->rcomp_value = 0x6d1c;
 		} else if (chip->batt_type == BATT_TYPE_GOGH) {
@@ -723,6 +732,7 @@ static int max17040_get_property(struct power_supply *psy,
 			    enum power_supply_property psp,
 			    union power_supply_propval *val)
 {
+	struct power_supply *psy_charger = power_supply_get_by_name("sec-charger");
 	struct max17040_chip *chip = container_of(psy,
 				struct max17040_chip, battery);
 
@@ -736,6 +746,14 @@ static int max17040_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		max17040_get_vcell(chip->client);
 		val->intval = chip->vcell;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+	{
+		union power_supply_propval value;
+		psy_charger->get_property(psy_charger, POWER_SUPPLY_PROP_CURRENT_NOW,
+				&value);
+		val->intval = value.intval;
+	}
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		switch (val->intval) {

@@ -15,9 +15,13 @@
 #define MIPI_DSI_H
 
 #include <mach/scm-io.h>
+#include <linux/list.h>
 #include "msm_fb_def.h"
 #include "msm_fb.h"
-#include <linux/list.h>
+
+#if defined(CONFIG_ESD_ERR_FG_RECOVERY)
+#include "mdnie_lite_tuning.h"
+#endif
 
 #ifdef BIT
 #undef BIT
@@ -54,7 +58,8 @@
 #define MIPI_DSI_PANEL_WXGA	6
 #define MIPI_DSI_PANEL_WUXGA	7
 #define MIPI_DSI_PANEL_720P_PT	8
-#define DSI_PANEL_MAX	8
+#define MIPI_DSI_PANEL_FULL_HD_PT	9
+#define DSI_PANEL_MAX	9
 
 enum {		/* mipi dsi panel */
 	DSI_VIDEO_MODE,
@@ -85,6 +90,7 @@ enum dsi_trigger_type {
 	DSI_CMD_MODE_DMA,
 	DSI_CMD_MODE_MDP,
 };
+
 
 #define DSI_NON_BURST_SYNCH_PULSE	0
 #define DSI_NON_BURST_SYNCH_EVENT	1
@@ -128,8 +134,6 @@ enum dsi_trigger_type {
 #define DSI_CMD_TRIGGER_SW		0x04
 #define DSI_CMD_TRIGGER_SW_SEOF		0x05	/* cmd dma only */
 #define DSI_CMD_TRIGGER_SW_TE		0x06
-#define MIPI_DSI_TX_TIMEOUT_MS	(HZ * 40/1000)/*40ms*/
-#define MIPI_DSI_TX_REF_MS	17
 
 extern struct device dsi_dev;
 extern int mipi_dsi_clk_on;
@@ -193,7 +197,7 @@ struct dsi_clk_desc {
 #define DSI_HDR_DATA1(data)	((data) & 0x0ff)
 #define DSI_HDR_WC(wc)		((wc) & 0x0ffff)
 
-#define DSI_BUF_SIZE	64
+#define DSI_BUF_SIZE	256
 #define MIPI_DSI_MRPS	0x04	/* Maximum Return Packet Size */
 
 #define MIPI_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
@@ -269,8 +273,10 @@ struct dsi_kickoff_action {
 typedef void (*fxn)(u32 data);
 
 #define CMD_REQ_RX	0x0001
-#define CMD_REQ_COMMIT 0x0002
+#define CMD_REQ_COMMIT	0x0002
+#define CMD_CLK_CTRL	0x0004
 #define CMD_REQ_NO_MAX_PKT_SIZE 0x0008
+#define CMD_REQ_SINGLE_TX 0x0010
 
 struct dcs_cmd_req {
 	struct dsi_cmd_desc *cmds;
@@ -294,6 +300,8 @@ struct mdp4_overlay_perf {
 	u32 mdp_bw;
 };
 
+extern struct mdp4_overlay_perf perf_current;
+
 char *mipi_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen);
 char *mipi_dsi_buf_init(struct dsi_buf *dp);
 void mipi_dsi_init(void);
@@ -302,6 +310,8 @@ void mipi_dsi_bist_ctrl(void);
 int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
 int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
 int mipi_dsi_cmds_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
+int mipi_dsi_cmds_single_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds,
+								int cnt);
 
 int mipi_dsi_cmd_dma_tx(struct dsi_buf *dp);
 int mipi_dsi_cmd_reg_tx(uint32 data);
@@ -322,6 +332,8 @@ void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd);
 void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd);
 void mipi_dsi_set_backlight(struct msm_fb_data_type *mfd, int level);
 void mipi_dsi_cmd_backlight_tx(struct dsi_buf *dp);
+void mipi_dsi_clk_enable(void);
+void mipi_dsi_clk_disable(void);
 void mipi_dsi_pre_kickoff_action(void);
 void mipi_dsi_post_kickoff_action(void);
 void mipi_dsi_pre_kickoff_add(struct dsi_kickoff_action *act);
@@ -334,48 +346,22 @@ void mipi_dsi_mdp_busy_wait(void);
 
 irqreturn_t mipi_dsi_isr(int irq, void *ptr);
 
+enum {
+	HS_TX_MODE,
+	LP_TX_MODE,
+};
+
 void mipi_set_tx_power_mode(int mode);
+void mipi_dsi_phy_ctrl(int on);
 void mipi_dsi_phy_init(int panel_ndx, struct msm_panel_info const *panel_info,
 	int target_type);
 int mipi_dsi_clk_div_config(uint8 bpp, uint8 lanes,
 			    uint32 *expected_dsi_pclk);
 int mipi_dsi_clk_init(struct platform_device *pdev);
 void mipi_dsi_clk_deinit(struct device *dev);
-
-#ifdef CONFIG_FB_MSM_MIPI_DSI
-void mipi_dsi_clk_enable(void);
-void mipi_dsi_clk_disable(void);
 void mipi_dsi_prepare_clocks(void);
 void mipi_dsi_unprepare_clocks(void);
 void mipi_dsi_ahb_ctrl(u32 enable);
-void mipi_dsi_phy_ctrl(int on);
-#else
-static inline void mipi_dsi_clk_enable(void)
-{
-	/* empty */
-}
-void mipi_dsi_clk_disable(void)
-{
-	/* empty */
-}
-void mipi_dsi_prepare_clocks(void)
-{
-	/* empty */
-}
-void mipi_dsi_unprepare_clocks(void)
-{
-	/* empty */
-}
-void mipi_dsi_ahb_ctrl(u32 enable)
-{
-	/* empty */
-}
-void mipi_dsi_phy_ctrl(int on)
-{
-	/* empty */
-}
-#endif
-
 void cont_splash_clk_ctrl(int enable);
 void mipi_dsi_turn_on_clks(void);
 void mipi_dsi_turn_off_clks(void);
@@ -388,6 +374,20 @@ void mipi_dsi_cmd_mdp_busy(void);
 
 #ifdef CONFIG_FB_MSM_MDP303
 void update_lane_config(struct msm_panel_info *pinfo);
+#endif
+
+#define RUMTIME_MIPI_CLK_CHANGE
+
+#if defined(RUMTIME_MIPI_CLK_CHANGE)
+int mipi_runtime_clk_change(int fps);
+void mipi_dsi_configure_dividers(int fps);
+#endif
+
+void mipi_dsi_irq_set(uint32 mask, uint32 irq);
+void mdp4_dsi_video_wait4dmap_for_dsi(int cndx);
+
+#if defined(CONFIG_MIPI_SAMSUNG_ESD_REFRESH) || defined(CONFIG_ESD_ERR_FG_RECOVERY)
+void esd_recovery(void);
 #endif
 
 #endif /* MIPI_DSI_H */

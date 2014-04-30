@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1411,4 +1411,3 @@ module_init(imx074_init);
 
 MODULE_DESCRIPTION("Sony 13 MP Bayer sensor driver");
 MODULE_LICENSE("GPL v2");
-

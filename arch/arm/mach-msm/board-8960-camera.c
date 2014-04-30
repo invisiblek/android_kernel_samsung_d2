@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,8 +13,9 @@
 
 #include <asm/mach-types.h>
 #include <linux/gpio.h>
-#include <mach/board.h>
+#include <mach/camera.h>
 #include <mach/msm_bus_board.h>
+#include <mach/socinfo.h>
 #include <mach/gpiomux.h>
 #include "devices.h"
 #include "board-8960.h"
@@ -22,7 +23,6 @@
 #include <linux/io.h>
 #include <linux/ctype.h>
 #include <linux/regulator/consumer.h>
-#include <mach/board-msm8960-camera.h>
 #include <mach/gpio.h>
 #include <mach/msm8960-gpio.h>
 #include <mach/msm_iomap.h>
@@ -31,7 +31,7 @@
 #ifdef CONFIG_LEDS_AAT1290A
 #include <linux/leds-aat1290a.h>
 #endif
-
+#define system_rev 13
 #if 0
 #if (defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)) && \
 	defined(CONFIG_I2C)
@@ -51,6 +51,8 @@ static struct msm_cam_expander_info cam_expander_info[] = {
 };
 #endif
 #endif
+
+void power_on_flash(void);
 
 static struct gpiomux_setting cam_settings[] = {
 	{
@@ -699,7 +701,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator 8921_lvs5\n");
+		printk("error enabling regulator 8921_lvs5\n");
 #if defined (CONFIG_MACH_ESPRESSO10_SPR)
 static struct camera_vreg_t msm_8960_mt9m114_vreg[] = {
 	{"cam_vio", REG_VS, 0, 0, 0},
@@ -715,10 +717,10 @@ static struct camera_vreg_t msm_8960_mt9m114_vreg[] = {
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage l18\n");
+		printk("error setting voltage l18\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator l18\n");
+		printk("error enabling regulator l18\n");
 
 	usleep(10);
 
@@ -731,10 +733,10 @@ static struct camera_vreg_t msm_8960_mt9m114_vreg[] = {
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 
 }
@@ -747,7 +749,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 /*static struct camera_vreg_t msm_8960_s5k3l1yx_vreg[] = {
@@ -761,14 +763,14 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor IO 1.8V -CAM_SENSOR_IO_1P8  */
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
@@ -808,7 +810,7 @@ static void cam_ldo_power_on(int mode)
 		l29 = regulator_get(NULL, "8921_lvs5");
 		ret = regulator_enable(l29);
 		if (ret)
-			cam_err("error enabling regulator 8921_lvs6\n");
+			printk("error enabling regulator 8921_lvs6\n");
 
 }
 
@@ -825,7 +827,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*VT core 1.8V - VTCAM_CORE_1.8V*/
@@ -855,7 +857,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator 8921_lvs5\n");
+		printk("error enabling regulator 8921_lvs5\n");
 	
 	printk(KERN_DEBUG "check CAM_SENSOR_IO_1P8 : %d\n", ret);
 
@@ -863,16 +865,16 @@ static void cam_ldo_power_on(int mode)
 	l16 = regulator_get(NULL, "8921_l16");
 	ret = regulator_set_voltage(l16, 2800000, 2800000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l16);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*VT core 1.5V - CAM_DVDD_1P5V*/
 	l30 = regulator_get(NULL, "8921_lvs6");
 	ret = regulator_enable(l30);
 	if (ret)
-		cam_err("error enabling regulator 8921_lv6\n");
+		printk("error enabling regulator 8921_lv6\n");
 	usleep(20);
 
 #if 1
@@ -881,10 +883,10 @@ static void cam_ldo_power_on(int mode)
 		l8 = regulator_get(NULL, "8921_l8");
 		ret = regulator_set_voltage(l8, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l8);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 	printk(KERN_DEBUG "check CAM_AF_2P8 : %d\n", ret);
 #endif	
@@ -902,7 +904,7 @@ static void cam_ldo_power_off(int mode)
 		if (l8) {
 			ret = regulator_disable(l8);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 #endif
@@ -910,21 +912,21 @@ static void cam_ldo_power_off(int mode)
 	if (l30) {
 		ret = regulator_disable(l30);
 		if (ret)
-			cam_err(" l30 error disabling regulator\n");
+			printk(" l30 error disabling regulator\n");
 	}
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
 	if (l16) {
 		ret = regulator_disable(l16);
 		if (ret)
-			cam_err(" l16 error disabling regulator\n");
+			printk(" l16 error disabling regulator\n");
 	}
 
 /*Sensor IO 1.8V -CAM_SENSOR_IO_1P8  */
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err(" l29 error disabling regulator\n");
+			printk(" l29 error disabling regulator\n");
 	}
 
 /*5M Core 1.2V - CAM_ISP_CORE_1P2*/
@@ -958,10 +960,10 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1200000, 1200000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 	usleep(500);
 
@@ -974,7 +976,7 @@ static void cam_ldo_power_on(int mode)
 		l29 = regulator_get(NULL, "8921_lvs5");
 		ret = regulator_enable(l29);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	} else {
 		if (system_rev >= BOARD_REV04)
 			gpio_set_value_cansleep(GPIO_CAM_SENSOR_IO_EN, 1);
@@ -983,15 +985,15 @@ static void cam_ldo_power_on(int mode)
 			l29 = regulator_get(NULL, "8921_lvs5");
 			ret = regulator_enable(l29);
 			if (ret)
-				cam_err("error enabling regulator\n");
+				printk("error enabling regulator\n");
 		} else {
 			l29 = regulator_get(NULL, "cam_vio");
 			ret = regulator_set_voltage(l29, 1800000, 1800000);
 			if (ret)
-				cam_err("error setting voltage\n");
+				printk("error setting voltage\n");
 			ret = regulator_enable(l29);
 			if (ret)
-				cam_err("error enabling regulator\n");
+				printk("error enabling regulator\n");
 		}
 	}
 
@@ -1000,10 +1002,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 
 /*standy VT */
@@ -1041,7 +1043,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		mdelay(1);
 	}
@@ -1052,7 +1054,7 @@ static void cam_ldo_power_off(int mode)
 		if (l29) {
 			ret = regulator_disable(l29);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	} else {
 		if (system_rev >= BOARD_REV04) {
@@ -1064,7 +1066,7 @@ static void cam_ldo_power_off(int mode)
 			if (l29) {
 				ret = regulator_disable(l29);
 				if (ret)
-					cam_err("error disabling regulator\n");
+					printk("error disabling regulator\n");
 			}
 		}
 	}
@@ -1072,7 +1074,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 #endif
 	mdelay(1);
@@ -1085,7 +1087,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	mdelay(1);
 
@@ -1093,7 +1095,7 @@ static void cam_ldo_power_off(int mode)
 		if (l12) {
 			ret = regulator_disable(l12);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		mdelay(1);
 	}
@@ -1126,10 +1128,10 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*5M Core 1.2V - CAM_ISP_CORE_1P2*/
 	gpio_set_value_cansleep(GPIO_CAM_CORE_EN, 1);
@@ -1148,10 +1150,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1168,7 +1170,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 }
 
@@ -1176,7 +1178,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor IO 1.8V -CAM_SENSOR_IO_1P8  */
@@ -1229,7 +1231,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 	usleep(1000);
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
@@ -1242,10 +1244,10 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 
 /*Sensor AF 2.8V -CAM_AF_2P8  */
@@ -1253,10 +1255,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1285,7 +1287,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		usleep(1000);
 	}
@@ -1294,7 +1296,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	usleep(1000);
 
@@ -1306,7 +1308,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	usleep(1000);
 
@@ -1353,10 +1355,10 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 	usleep(1000);
 
 
@@ -1365,10 +1367,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1391,7 +1393,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 
@@ -1399,7 +1401,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
@@ -1439,7 +1441,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
 	gpio_set_value_cansleep(GPIO_CAM_A_EN, 1);
@@ -1450,20 +1452,20 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*Sensor AF 2.8V -CAM_AF_2P8  */
 	if (!mode) {
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1486,7 +1488,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 
@@ -1494,7 +1496,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
@@ -1505,7 +1507,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*5M Core 1.2V - CAM_ISP_CORE_1P2*/
@@ -1544,7 +1546,7 @@ static void cam_ldo_power_on(int mode)
 		l29 = regulator_get(NULL, "8921_lvs5");
 		ret = regulator_enable(l29);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 	usleep(1000);
 
@@ -1558,10 +1560,10 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 
 /*Sensor AF 2.8V -CAM_AF_2P8  */
@@ -1569,10 +1571,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1594,7 +1596,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		usleep(1000);
 	}
@@ -1603,7 +1605,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	usleep(1000);
 
@@ -1618,7 +1620,7 @@ static void cam_ldo_power_off(int mode)
 		if (l29) {
 			ret = regulator_disable(l29);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 	usleep(1000);
@@ -1652,7 +1654,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
 	gpio_set_value_cansleep(GPIO_CAM_A_EN, 1);
@@ -1663,20 +1665,20 @@ static void cam_ldo_power_on(int mode)
 	l18 = regulator_get(NULL, "8921_l18");
 	ret = regulator_set_voltage(l18, 1500000, 1500000);
 	if (ret)
-		cam_err("error setting voltage\n");
+		printk("error setting voltage\n");
 	ret = regulator_enable(l18);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /*Sensor AF 2.8V -CAM_AF_2P8  */
 	if (!mode) {
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 }
 
@@ -1698,7 +1700,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 	}
 
@@ -1706,7 +1708,7 @@ static void cam_ldo_power_off(int mode)
 	if (l18) {
 		ret = regulator_disable(l18);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*Sensor AVDD 2.8V - CAM_SENSOR_A2P8 */
@@ -1716,7 +1718,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 
 /*5M Core 1.2V - CAM_ISP_CORE_1P2*/
@@ -1760,7 +1762,7 @@ static void cam_ldo_power_on(int mode)
 	l29 = regulator_get(NULL, "8921_lvs5");
 	ret = regulator_enable(l29);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 
 /* VT XSHUTDOWN */
 	if (mode)
@@ -1776,10 +1778,10 @@ static void cam_ldo_power_on(int mode)
 		l11 = regulator_get(NULL, "8921_l11");
 		ret = regulator_set_voltage(l11, 2800000, 2800000);
 		if (ret)
-			cam_err("error setting voltage\n");
+			printk("error setting voltage\n");
 		ret = regulator_enable(l11);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 	}
 
 /*Set Main clock */
@@ -1811,7 +1813,7 @@ static void cam_ldo_power_off(int mode)
 		if (l11) {
 			ret = regulator_disable(l11);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		mdelay(1);
 	}
@@ -1824,7 +1826,7 @@ static void cam_ldo_power_off(int mode)
 	if (l29) {
 		ret = regulator_disable(l29);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	mdelay(1);
 
@@ -1878,7 +1880,7 @@ static bool cam_is_vdd_core_set(void)
 	return isVddCoreSet;
 }
 
-void power_on_flash()
+void power_on_flash(void)
 {
 	int temp = 0;
 	int ret = 0;
@@ -1900,7 +1902,7 @@ void power_on_flash()
 		l28 = regulator_get(NULL, "8921_lvs4");
 		ret = regulator_enable(l28);
 		if (ret)
-			cam_err("error enabling regulator\n");
+			printk("error enabling regulator\n");
 		usleep(1*1000);
 		isFlashCntlEn = true;
 	}
@@ -1941,7 +1943,7 @@ static void cam_ldo_power_on(int mode, int num)
 			l29 = regulator_get(NULL, "8921_lvs5");
 			ret = regulator_enable(l29);
 			if (ret)
-				cam_err("error enabling regulator\n");
+				printk("error enabling regulator\n");
 			usleep(1*1000);
 
 			/* ISP 8M MIPI 1.2V */
@@ -1969,7 +1971,7 @@ static void cam_ldo_power_on(int mode, int num)
 			l28 = regulator_get(NULL, "8921_lvs4");
 			ret = regulator_enable(l28);
 			if (ret)
-				cam_err("error enabling regulator\n");
+				printk("error enabling regulator\n");
 			usleep(1*1000);
 
 			/* ISP CORE 1.2V */
@@ -1982,11 +1984,11 @@ static void cam_ldo_power_on(int mode, int num)
 				ret = regulator_set_voltage(isp_core,
 					vddCore, vddCore);
 				if (ret)
-					cam_err("error setting voltage\n");
+					printk("error setting voltage\n");
 
 				ret = regulator_enable(isp_core);
 				if (ret)
-					cam_err("error enabling regulator.");
+					printk("error enabling regulator.");
 			}
 #elif defined(CONFIG_MACH_M2_VZW)
 			if (system_rev >= BOARD_REV08) {
@@ -1997,11 +1999,11 @@ static void cam_ldo_power_on(int mode, int num)
 				ret = regulator_set_voltage(isp_core,
 					vddCore, vddCore);
 				if (ret)
-					cam_err("error setting voltage\n");
+					printk("error setting voltage\n");
 
 				ret = regulator_enable(isp_core);
 				if (ret)
-					cam_err("error enabling regulator.");
+					printk("error enabling regulator.");
 			} else
 				gpio_set_value_cansleep(CAM_CORE_EN, 1);
 #elif defined(CONFIG_MACH_M2_SPR)
@@ -2013,11 +2015,11 @@ static void cam_ldo_power_on(int mode, int num)
 				ret = regulator_set_voltage(isp_core,
 					vddCore, vddCore);
 				if (ret)
-					cam_err("error setting voltage\n");
+					printk("error setting voltage\n");
 
 				ret = regulator_enable(isp_core);
 				if (ret)
-					cam_err("error enabling regulator.");
+					printk("error enabling regulator.");
 			} else
 				gpio_set_value_cansleep(CAM_CORE_EN, 1);
 #elif defined(CONFIG_MACH_M2_DCM)
@@ -2029,11 +2031,11 @@ static void cam_ldo_power_on(int mode, int num)
 				ret = regulator_set_voltage(isp_core,
 					vddCore, vddCore);
 				if (ret)
-					cam_err("error setting voltage\n");
+					printk("error setting voltage\n");
 
 				ret = regulator_enable(isp_core);
 				if (ret)
-					cam_err("error enabling regulator.");
+					printk("error enabling regulator.");
 			} else
 				gpio_set_value_cansleep(gpio_rev(CAM_CORE_EN), 1);
 #elif defined(CONFIG_MACH_K2_KDI)
@@ -2069,7 +2071,7 @@ static void cam_ldo_power_on(int mode, int num)
 			l29 = regulator_get(NULL, "8921_lvs5");
 			ret = regulator_enable(l29);
 			if (ret)
-				cam_err("error enabling regulator\n");
+				printk("error enabling regulator\n");
 
 			/* ISP 8M MIPI 1.2V */
 			gpio_set_value_cansleep(CAM_MIPI_EN, 1);
@@ -2118,7 +2120,7 @@ static void cam_ldo_power_off(int mode)
 		if (l29) {
 			ret = regulator_disable(l29);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		usleep(1*1000);
 
@@ -2150,7 +2152,7 @@ static void cam_ldo_power_off(int mode)
 		if (l29) {
 			ret = regulator_disable(l29);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		usleep(1*1000);
 
@@ -2167,25 +2169,25 @@ static void cam_ldo_power_off(int mode)
 		if (system_rev >= BOARD_REV03)
 			ret = regulator_disable(isp_core);
 		if (ret)
-			cam_err("error disabling regulator");
+			printk("error disabling regulator");
 		regulator_put(isp_core);
 #elif defined(CONFIG_MACH_M2_VZW)
 		if (system_rev >= BOARD_REV08)
 			ret = regulator_disable(isp_core);
 		if (ret)
-			cam_err("error disabling regulator");
+			printk("error disabling regulator");
 		regulator_put(isp_core);
 #elif defined(CONFIG_MACH_M2_SPR)
 		if (system_rev >= BOARD_REV03)
 			ret = regulator_disable(isp_core);
 		if (ret)
-			cam_err("error disabling regulator");
+			printk("error disabling regulator");
 		regulator_put(isp_core);
 #elif defined(CONFIG_MACH_M2_DCM)
 		if (system_rev >= BOARD_REV03){
 			ret = regulator_disable(isp_core);
 			if (ret)
-				cam_err("error disabling regulator");
+				printk("error disabling regulator");
 			regulator_put(isp_core);
 		}
 		else
@@ -2201,7 +2203,7 @@ static void cam_ldo_power_off(int mode)
 		if (l28) {
 			ret = regulator_disable(l28);
 			if (ret)
-				cam_err("error disabling regulator\n");
+				printk("error disabling regulator\n");
 		}
 		usleep(1*1000);
 
@@ -2617,7 +2619,7 @@ static int aat1290a_setGpio(void)
 	l28 = regulator_get(NULL, "8921_lvs4");
 	ret = regulator_enable(l28);
 	if (ret)
-		cam_err("error enabling regulator\n");
+		printk("error enabling regulator\n");
 	usleep(1*1000);
 
 	if (pmic_gpio_msm_flash_cntl_en) {
@@ -2658,7 +2660,7 @@ static int aat1290a_freeGpio(void)
 	if (l28) {
 		ret = regulator_disable(l28);
 		if (ret)
-			cam_err("error disabling regulator\n");
+			printk("error disabling regulator\n");
 	}
 	usleep(1*1000);
 
@@ -3430,7 +3432,7 @@ void __init msm8960_init_cam(void)
 		s_info->sensor_platform_info->sensor_pwd =
 			gpio_rev(CAM_CORE_EN);
 #endif
-		msm_get_cam_resources(s_info);
+//		msm_get_cam_resources(s_info);
 		platform_device_register(cam_dev[0]);
 #endif
 #if defined(CONFIG_S5K6A3YX)
@@ -3448,7 +3450,7 @@ void __init msm8960_init_cam(void)
 				msm_cam_gpio_2d_tbl_v2;
 	}
 
-		msm_get_cam_resources(s_info);
+//		msm_get_cam_resources(s_info);
 		platform_device_register(cam_dev[1]);
 #endif
 	if (spi_register_board_info(

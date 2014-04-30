@@ -22,10 +22,20 @@
  */
 struct rw_semaphore {
 	__s32			activity;
-	spinlock_t		wait_lock;
+	raw_spinlock_t		wait_lock;
 	struct list_head	wait_list;
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 	struct lockdep_map dep_map;
+#endif
+#ifdef CONFIG_SEC_FORKHANG_DEBUG
+	/* FIX ME - This is just for the temporary debug, never add this to final version.
+	 * If activity == -1 owner is who posses the lock 
+	 * If activity == 0 owner is who lastly released the lock
+	 */
+	struct task_struct *	owner;
+	pid_t			owner_pid;
+	char			owner_comm[16];
+	void *			caller;
 #endif
 };
 

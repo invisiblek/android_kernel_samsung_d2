@@ -39,6 +39,14 @@ struct max17040_platform_data {
 #define FULL_SOC_HIGH		10000
 #define FULL_KEEP_SOC		50
 #define RCOMP0_TEMP	20 /* 'C */
+#elif defined(CONFIG_MACH_M2_REFRESHSPR)
+#define EMPTY_COND_SOC		100
+#define EMPTY_SOC		30
+#define FULL_SOC_DEFAULT	9860
+#define FULL_SOC_LOW		9700
+#define FULL_SOC_HIGH		10000
+#define FULL_KEEP_SOC		50
+#define RCOMP0_TEMP	20 /* 'C */
 #elif defined(CONFIG_MACH_M2_ATT) || defined(CONFIG_MACH_M2_SPR) || \
 	defined(CONFIG_MACH_M2_VZW) || defined(CONFIG_MACH_M2_SKT) || \
 	defined(CONFIG_MACH_M2_DCM) || defined(CONFIG_MACH_GOGH) || \
@@ -59,16 +67,6 @@ struct max17040_platform_data {
 #define FULL_SOC_HIGH		9650
 #define FULL_KEEP_SOC		50
 #define RCOMP0_TEMP	20 /* 'C */
-#endif
-
-#if defined(CONFIG_MACH_M2_MTR)
-#define EMPTY_COND_SOC          100
-#define EMPTY_SOC               150
-#define FULL_SOC_DEFAULT        9960
-#define FULL_SOC_LOW            9860
-#define FULL_SOC_HIGH           10200
-#define FULL_KEEP_SOC           50
-#define RCOMP0_TEMP     20 /* 'C */
 #endif
 
 #endif

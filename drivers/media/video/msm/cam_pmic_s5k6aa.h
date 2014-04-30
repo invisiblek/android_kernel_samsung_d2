@@ -7,13 +7,13 @@
 #define	CAM_8M_RST		50
 #define	CAM_VGA_RST		41
 
-#define	CAM_MEGA_EN		37	
+#define	CAM_MEGA_EN		37
 
 #define	CAM_VGA_EN		42
 
-#define	CAM_PMIC_STBY		37	
+#define	CAM_PMIC_STBY		37
 
-#define	CAM_IO_EN		37	
+#define	CAM_IO_EN		37
 #endif
 
 

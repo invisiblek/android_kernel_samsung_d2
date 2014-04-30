@@ -7,6 +7,7 @@ ccflags-y += -v
 
 obj-$(CONFIG_TDMB) += tdmb.o tdmb_data.o
 
+
 # FC8050
 ccflags-$(CONFIG_TDMB_FC8050) += -Idrivers/media/tdmb/fc8050
 obj-$(CONFIG_TDMB_FC8050) += tdmb_port_fc8050.o

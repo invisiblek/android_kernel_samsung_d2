@@ -82,7 +82,6 @@ fw-shipped-$(CONFIG_SERIAL_8250_CS) += cis/MT5634ZLX.cis cis/RS-COM-2P.cis \
 fw-shipped-$(CONFIG_PCMCIA_SMC91C92) += ositech/Xilinx7OD.bin
 fw-shipped-$(CONFIG_SCSI_ADVANSYS) += advansys/mcode.bin advansys/38C1600.bin \
 				      advansys/3550.bin advansys/38C0800.bin
-fw-shipped-$(CONFIG_SCSI_ISCI) += isci/isci_firmware.bin
 fw-shipped-$(CONFIG_SCSI_QLOGIC_1280) += qlogic/1040.bin qlogic/1280.bin \
 					 qlogic/12160.bin
 fw-shipped-$(CONFIG_SCSI_QLOGICPTI) += qlogic/isp1000.bin
@@ -140,9 +139,46 @@ fw-shipped-$(CONFIG_USB_SERIAL_KEYSPAN_PDA) += keyspan_pda/keyspan_pda.fw
 fw-shipped-$(CONFIG_USB_SERIAL_XIRCOM) += keyspan_pda/xircom_pgs.fw
 fw-shipped-$(CONFIG_USB_VICAM) += vicam/firmware.fw
 fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
-fw-shipped-$(CONFIG_WACOM_W9001) += wacom/n5100.fw
-
+fw-shipped-$(CONFIG_TOUCHSCREEN_MXT224S_NEW) += tsp_atmel/mxt224s_Golden.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_MXT336S) += tsp_atmel/mxt336s_Serrano.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC360_TOUCHKEY) += coreriver/tc360.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC360_TOUCHKEY) += coreriver/tc360_serrano_eur.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC360_TOUCHKEY) += coreriver/tc360_serrano_usa.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC360_TOUCHKEY) += coreriver/tc360_golden.fw
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
+#for sensorhub
+fw-shipped-$(CONFIG_SENSORS_SSP) += ssp.fw ssp_rev03.fw
+fw-shipped-$(CONFIG_SENSORS_SSP) += ssp_crashed.fw
+
+
+#for TSP firmware
+fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXTS) += tsp_atmel/mXT540S.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXTS) += tsp_atmel/mXT540Si.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_a1.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_3_4.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_4_0.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_4_3.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_5_1.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_fac.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_5_1_fac.fw
+ifdef CONFIG_MACH_JACTIVE_EUR
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_hsync.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_hsync_fac.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_non_hsync.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_non_hsync_fac.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_d0.fw
+endif
+ifdef CONFIG_MACH_JACTIVE_ATT
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_hsync.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_hsync_fac.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_non_hsync.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/jactive/synaptics_b0_non_hsync_fac.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_d0.fw
+endif
+
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_nep_13.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_nep_14.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_nep_19.fw
 
 fw-shipped-$(CONFIG_TOUCHSCREEN_MMS144) += tsp_melfas/CORE.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_MMS144) += tsp_melfas/PRIV.fw

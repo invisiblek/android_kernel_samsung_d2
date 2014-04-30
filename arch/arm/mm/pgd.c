@@ -10,12 +10,22 @@
 #include <linux/mm.h>
 #include <linux/gfp.h>
 #include <linux/highmem.h>
+#include <linux/slab.h>
 
+#include <asm/cp15.h>
 #include <asm/pgalloc.h>
 #include <asm/page.h>
 #include <asm/tlbflush.h>
 
 #include "mm.h"
+
+#ifdef CONFIG_ARM_LPAE
+#define __pgd_alloc()	kmalloc(PTRS_PER_PGD * sizeof(pgd_t), GFP_KERNEL)
+#define __pgd_free(pgd)	kfree(pgd)
+#else
+#define __pgd_alloc()	(pgd_t *)__get_free_pages(GFP_KERNEL, 2)
+#define __pgd_free(pgd)	free_pages((unsigned long)pgd, 2)
+#endif
 
 /*
  * need to get a 16k page for level 1
@@ -27,7 +37,7 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	pmd_t *new_pmd, *init_pmd;
 	pte_t *new_pte, *init_pte;
 
-	new_pgd = (pgd_t *)__get_free_pages(GFP_KERNEL, 2);
+	new_pgd = __pgd_alloc();
 	if (!new_pgd)
 		goto no_pgd;
 
@@ -42,10 +52,25 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 
 	clean_dcache_area(new_pgd, PTRS_PER_PGD * sizeof(pgd_t));
 
+#ifdef CONFIG_ARM_LPAE
+	/*
+	 * Allocate PMD table for modules and pkmap mappings.
+	 */
+	new_pud = pud_alloc(mm, new_pgd + pgd_index(MODULES_VADDR),
+			    MODULES_VADDR);
+	if (!new_pud)
+		goto no_pud;
+
+	new_pmd = pmd_alloc(mm, new_pud, 0);
+	if (!new_pmd)
+		goto no_pmd;
+#endif
+
 	if (!vectors_high()) {
 		/*
 		 * On ARM, first page must always be allocated since it
-		 * contains the machine vectors.
+		 * contains the machine vectors. The vectors are always high
+		 * with LPAE.
 		 */
 		new_pud = pud_alloc(mm, new_pgd, 0);
 		if (!new_pud)
@@ -74,7 +99,7 @@ no_pte:
 no_pmd:
 	pud_free(mm, new_pud);
 no_pud:
-	free_pages((unsigned long)new_pgd, 2);
+	__pgd_free(new_pgd);
 no_pgd:
 	return NULL;
 }
@@ -85,6 +110,13 @@ void pgd_free(struct mm_struct *mm, pgd_t *pgd_base)
 	pud_t *pud;
 	pmd_t *pmd;
 	pgtable_t pte;
+#ifdef  TIMA_PGD_FREE_MANAGE
+	unsigned long cmd_id = 0x3f80b221;
+	unsigned long pmd_base;
+#if __GNUC__ >= 4 && __GNUC_MINOR__ >= 6
+        __asm__ __volatile__(".arch_extension sec\n");
+#endif
+#endif
 
 	if (!pgd_base)
 		return;
@@ -111,5 +143,44 @@ no_pud:
 	pgd_clear(pgd);
 	pud_free(mm, pud);
 no_pgd:
-	free_pages((unsigned long) pgd_base, 2);
+#ifdef CONFIG_ARM_LPAE
+	/*
+	 * Free modules/pkmap or identity pmd tables.
+	 */
+	for (pgd = pgd_base; pgd < pgd_base + PTRS_PER_PGD; pgd++) {
+		if (pgd_none_or_clear_bad(pgd))
+			continue;
+		if (pgd_val(*pgd) & L_PGD_SWAPPER)
+			continue;
+		pud = pud_offset(pgd, 0);
+		if (pud_none_or_clear_bad(pud))
+			continue;
+		pmd = pmd_offset(pud, 0);
+		pud_clear(pud);
+		pmd_free(mm, pmd);
+		pgd_clear(pgd);
+		pud_free(mm, pud);
+	}
+#endif
+#ifdef  TIMA_PGD_FREE_MANAGE
+	__asm__ __volatile__ (
+		"stmfd  sp!,{r0-r1, r11}\n"
+		"mov   	r11, r0\n"
+		"mov    r0, %0\n"
+		"mov    r1, %1\n"
+		"smc    #11\n"
+		"mov    r0, #0\n"
+		"mcr    p15, 0, r0, c8, c3, 0\n"
+       		"dsb\n"
+       		"isb\n"
+		"pop    {r0-r1, r11}\n"
+		::"r"(cmd_id),"r"(pgd):"r0","r1","r11","cc");
+
+        pmd_base = ((unsigned long)pgd) & (~0x3fff);
+	tima_verify_state(pmd_base, 0, 0, 3);
+	tima_verify_state(pmd_base + 0x1000, 0, 0, 3);
+	tima_verify_state(pmd_base + 0x2000, 0, 0, 3);
+	tima_verify_state(pmd_base + 0x3000, 0, 0, 3);
+#endif
+	__pgd_free(pgd_base);
 }

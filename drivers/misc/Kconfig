@@ -2,23 +2,13 @@
 # Misc strange devices
 #
 
-# This one has to live outside of the MISC_DEVICES conditional,
-# because it may be selected by drivers/platform/x86/hp_accel.
+menu "Misc devices"
+
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT
 	select INPUT_POLLDEV
 	default n
-
-menuconfig MISC_DEVICES
-	bool "Misc devices"
-	---help---
-	  Say Y here to get to see options for device drivers from various
-	  different categories. This option alone does not add any kernel code.
-
-	  If you say N, all options in this submenu will be skipped and disabled.
-
-if MISC_DEVICES
 
 config AD525X_DPOT
 	tristate "Analog Devices Digital Potentiometers"
@@ -62,12 +52,12 @@ config AD525X_DPOT_SPI
 	  module will be called ad525x_dpot-spi.
 
 config ANDROID_PMEM
-        bool "Android pmem allocator"
-        default y
+	bool "Android pmem allocator"
+	default y
 
 config ATMEL_PWM
 	tristate "Atmel AT32/AT91 PWM support"
-	depends on AVR32 || ARCH_AT91SAM9263 || ARCH_AT91SAM9RL || ARCH_AT91CAP9
+	depends on HAVE_CLK
 	help
 	  This option enables device driver support for the PWM channels
 	  on certain Atmel processors.  Pulse Width Modulation is used for
@@ -150,6 +140,7 @@ config PHANTOM
 
 config INTEL_MID_PTI
 	tristate "Parallel Trace Interface for MIPI P1149.7 cJTAG standard"
+	depends on PCI
 	default n
 	help
 	  The PTI (Parallel Trace Interface) driver directs
@@ -388,6 +379,53 @@ config SENSORS_APDS990X
 	   To compile this driver as a module, choose M here: the
 	   module will be called apds990x. If unsure, say N here.
 
+config SAMSUNG_JACK
+        bool "3.5 PI JACK driver for Samsung devices"
+        depends on INPUT
+        default n
+        ---help---
+	   This option enables gadget support for JACK controller. If
+	   Say Y here if you want to build a driver for Samsung 3.5 PI JACK device
+
+	   To compile this driver as a module, choose M here: the
+	   module will be called sec_jack. If unsure, say N here.
+
+config SAMSUNG_JACK_GNDLDET
+	bool "GND plus L Detection for Earjack"
+	depends on INPUT
+	default n
+	help
+	  This is gnd plus l detection for earjack.
+	  The gnd gpio is added for the detection of earjack.
+	  This is added to decide the earjack properly
+	  in case of the insertion of water.
+	  
+config SAMSUNG_JACK_EXT_LDO
+	bool "Control for External LDO in Samsung Earjack device"
+	depends on INPUT
+	default n
+	help
+	  This is control for externel ldo.
+	  Say Y here if you want to add LDO control for samsung earjack
+
+config MUIC_DET_JACK
+	bool "Micro usb JACK driver for Samsung devices"
+	depends on INPUT
+	default n
+	---help---
+		This option enables mirco usb ear JACK controller.
+
+config 2MIC_ES305
+	bool "ES305 driver for audience 2 mic device"
+	depends on I2C
+	default n
+	---help---
+	   This option enables voice processing audience chip.Please enable this chip
+	   if you want to enable voice processing during call.
+
+	   To compile this driver as a module, choose M here: the
+	   module will be called a2220. If unsure, say N here.
+
 config HMC6352
 	tristate "Honeywell HMC6352 compass"
 	depends on I2C
@@ -403,23 +441,6 @@ config SENSORS_AK8975
 	  If you say yes here you get support for Asahi Kasei's
 	  orientation sensor AK8975.
 
-config SENSORS_AKM8973
-	tristate "AKM8973 Compass Driver"
-	depends on I2C
-	help
-	 AKM8973 Compass Driver implemented by HTC.
-
-config SENSORS_AKM8976
-	tristate "AKM8976 Compass Driver"
-	depends on I2C
-	help
-	  AKM8976 Compass Driver implemented by HTC.
-
-config VP_A1026
-	tristate "A1026 Voice Processor Driver"
-	depends on I2C
-	help
-	  A1026 Voice Processor Driver implemented by HTC.
 config EP93XX_PWM
 	tristate "EP93xx PWM support"
 	depends on ARCH_EP93XX
@@ -523,6 +544,41 @@ config PCH_PHUB
 	  To compile this driver as a module, choose M here: the module will
 	  be called pch_phub.
 
+config USB_SWITCH_FSA9480
+	tristate "FSA9480 USB Switch"
+	depends on I2C
+	help
+	  The FSA9480 is a USB port accessory detector and switch.
+	  The FSA9480 is fully controlled using I2C and enables USB data,
+	  stereo and mono audio, video, microphone and UART data to use
+	  a common connector port.
+
+config USB_SWITCH_FSA9485
+	tristate "FSA9485 USB Switch"
+	depends on I2C
+	help
+	  The FSA9485 is a USB port accessory detector and switch.
+	  The FSA9485 is fully controlled using I2C and enables USB data,
+	  stereo and mono audio, video, microphone and UART data to use
+	  a common connector port.
+
+config USB_SWITCH_TSU6721
+        tristate "TSU6721 USB Switch"
+        depends on I2C
+        help
+          The TSU6721 is a USB port accessory detector and switch.
+          The TSU6721 is fully controlled using I2C and enables USB data,
+          stereo and mono audio, video, microphone and UART data to use
+          a common connector port.
+
+config MAX8997_MUIC
+	tristate "MAX8997 MUIC Support"
+	depends on MFD_MAX8997
+	help
+	  If you say yes here you get support for the MUIC device of
+	  Maxim MAX8997 PMIC.
+	  The MAX8997 MUIC is a USB port accessory detector and switch.
+
 config WL127X_RFKILL
 	tristate "Bluetooth power control driver for TI wl127x"
 	depends on RFKILL
@@ -612,6 +668,20 @@ config PMIC8XXX_VIBRATOR
 	  on the PM8XXX chips. The vibrator is controlled using the
 	  timed output class.
 
+config ANDROID_VIBRATOR
+	bool "Android vibrator support"
+	depends on ANDROID_TIMED_OUTPUT
+	default n
+	help
+	  This option enalbes device driver support for Android Vibrator driver.
+	  Some functions should be given by platform data for enable PWM, Motor IC, etc.
+
+config TOUCHSENSE_VIBRATOR
+	bool "Immersion Touchsense vibrator support"
+	help
+	  This option enables device driver support for Immersion Touchsense
+	  vibrator.
+
 config PMIC8XXX_NFC
 	tristate "Qualcomm PM8XXX support for Near Field Communication"
 	depends on MFD_PM8XXX
@@ -637,14 +707,6 @@ config PMIC8058_XOADC
 	  PMIC8058. Driver interface to program registers of the ADC over
 	  AMUX channels, devices on programmable MPP's and xotherm.
 
-config TZCOM
-	tristate "Trustzone Communicator driver"
-	default n
-	help
-	  Provides a communication interface between userspace and
-	  TrustZone Operating Environment (TZBSP) using Secure Channel
-	  Manager (SCM) interface.
-
 config QSEECOM
 	tristate "Qualcomm Secure Execution Communicator driver"
 	help
@@ -659,80 +721,52 @@ config QFP_FUSE
 	  fuses. The ioctls provides the necessary interface
 	  to the fuse block. Currently this is supported only
 	  on FSM targets.
-
-config NFC_PN544
-        bool "NXP PN544 NFC Controller Driver"
-        default n
-        help
-          NXP PN544 Near Field Communication controller support.
-
+config MPU_411_ENABLE
+	bool "mpu gyro sensor MPL 4.1.1"
+	depends on I2C
+	default n
 config SEC_MISC
 	bool "Samsung P series miscellaneous driver"
 	default n
 	---help---
 	  Samsung P series miscellaneous driver
+	  This creates sys fs entries for changing
+	  debug levels. The debug level is stored in
+	  Param partition.
 
-config USB_SWITCH_FSA9485
-	tristate "FSA9480 USB Switch"
-	depends on I2C
+config USB_HSIC_SMSC_HUB
+	tristate "Support for HSIC based MSM on-chip SMSC3503 HUB"
+	depends on USB_EHCI_MSM_HSIC
 	help
-	  The FSA9480 is a USB port accessory detector and switch.
-	  The FSA9480 is fully controlled using I2C and enables USB data,
-	  stereo and mono audio, video, microphone and UART data to use
-	  a common connector port.
+	  Enables support for the HSIC (High Speed Inter-Chip) based
+	  SMSC3503 hub controller present on the Qualcomm chipsets.
 
-config USB_SWITCH_SMART_DOCK_ENABLE
-	bool "Smartdock support"
-	default n
+	  This adds support for connecting devices like mouse in HSIC
+	  Host mode.
 
-config MPU_411_ENABLE
-	bool "mpu gyro sensor MPL 4.1.1"
-	depends on I2C
-	default n
-
-config YAS_532_ENABLE
-	bool "yas 532 sensor YAS 4.2.602"
-	depends on I2C
-	default n
-
-config OPTICAL_GP2A
-	depends on I2C
-	tristate "GP2A driver"
-	default n
+config BU52031NVX
+	tristate "Cradle BU52031NVX support"
+	depends on MFD_PM8XXX
 	help
-	  This option enables proximity & light sensors using gp2a driver.
+	  This option enables device driver support for the cradle
+	  on the PM8XXX chips. The cradle is controlled using the
+	  PM8XXX gpio.
 
-config OPTICAL_GP2AP020A00F
+config BU52031NVX_POUCHDETECT
+	tristate "Cradle BU52031NVX_POUCHDETECT support"
+	depends on BU52031NVX
+	help
+	  depends on BU52031NVX
+
+config BCM2079X_NFC_I2C
+	tristate "BCM2079X NFC driver for I2C interface"
 	depends on I2C
-	tristate "GP2AP020A00F driver"
 	default n
 	help
-	  This option enables proximity & light sensors using gp2ap020a00f driver.
-
-config OPTICAL_TAOS_TRITON
-	depends on I2C
-	tristate "TAOS ambient light and proximity input device"
-	default n
-
-config OPTICAL_TAOS_TMD2672X
-        depends on I2C
-        tristate "TAOS ambient proximity input device without light sensor"
-        default n
-
-config SENSORS_AL3201
-	depends on I2C
-	tristate "LITEON AL3201 ambient light sensor"
-	default n
-
-config SENSORS_CM36651
-	depends on I2C
-	tristate "CM36651 driver"
-	default n
-	help
-	  The CM36651 is a RGB sensor.
-	  The CM36651 is fully controlled using I2C.
-	  This option enables proximity sensor and RGB sensor
-	  using cm36651 driver.
+	  Say yes if you want BCM2079X Near Field Communication driver.
+	  This is for spi connected version. If unsure, say N here.
+	  To compile this driver as a module, choose m here. The module will
+	  be called bcm2079x-i2c.
 
 config VP_A2220
 	tristate "VP driver"
@@ -741,29 +775,16 @@ config VP_A2220
 	  This option enables voice processing audience chip.Please enable this chip
 	  if you want to enable voice processing during call.
 
-config ADC_STMPE811
-	tristate "ADC stmpe811 driver"
-	default n
-	depends on I2C
-	help
-	  This option enables ADC checking driver. stmpe811.
 
-config ADC_DATA_CHANNEL_FOR_ACCESSORY_ID
-	int "ADC_DATA Channel No. for ACCESSORY_ID"
-	default "7"
-	depends on ADC_STMPE811
-	help
-	  This option selects ADC_DATA CHANNEL for ACCESSORY ID.
-
-config SAMSUNG_JACK
-	bool "3.5 PI JACK driver for Samsung devices"
-	depends on INPUT
+config SEC_TORCH_FLASH
+	bool "torch flash driver"
 	default n
 	help
-	  This is 3.5 PI JACK driver for Samsung devices.
+	  This driver provides torch flash function.	  
+
 config TIMA_LOG
 	tristate "Support for dumping TIMA log"
-	default y
+	default m
 	help
 	  This option enables support for dumping TIMA log
 
@@ -773,25 +794,39 @@ config TIMA_TEST
 	help
 	  This option enables kernel component of tima test suite
 
-config SAMSUNG_JACK_GNDLDET
-	bool "GND plus L Detection for Earjack"
-	depends on INPUT
-	default n
+config D2_TIMA_LOG
+	tristate "Log dumping support for 8960 D2 TIMA"
+        default n
 	help
-	  This is gnd plus l detection for earjack.
-	  The gnd gpio is added for the detection of earjack.
-	  This is added to decide the earjack properly
-	  in case of the insertion of water.
+         TIMA Log dumping support
 
-config OPTICAL_BH1721
-	tristate "Rohm bh1721 Optical Sensor"
-	default n
-	depends on I2C
+config 8930_TIMA_LOG
+	tristate "Log dumping support for 8930 TIMA"
+        default n
+	help
+         TIMA Log dumping support
 
-config SENSORS_AK8963
-	tristate "AKM Geomagnetic Sensor"
-	default n
-	depends on I2C
+config NFC_PN544
+        bool "NXP PN544 NFC Controller Driver"
+        default n
+        help
+          NXP PN544 Near Field Communication controller support.
+
+config NFC_PN547
+    bool "NXP PN547 NFC Controller Driver"
+    depends on I2C
+    default n
+    help
+      NXP PN547 Near Field Communication controller support.
+
+config NFC_PN547_CLOCK_REQUEST
+    bool "NXP PN547 PM8917 XO Clock Source"
+    depends on NFC_PN547
+    default n
+    help
+      PM8917 Clock request for NXP PN547 Near Field
+      Communication controller support.
+      This option enables A1 clock for NFC.
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
@@ -800,6 +835,8 @@ source "drivers/misc/iwmc3200top/Kconfig"
 source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
+source "drivers/misc/altera-stapl/Kconfig"
+source "drivers/misc/slimport_anx7808/Kconfig"
 source "drivers/misc/inv_mpu/Kconfig"
-source "drivers/misc/yas532/Kconfig"
-endif # MISC_DEVICES
+
+endmenu

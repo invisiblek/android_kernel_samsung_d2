@@ -16,24 +16,35 @@
 #include <linux/input.h>
 #include <linux/init.h>
 #include <linux/slab.h>
-#include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
-#include <linux/delay.h>
 #include <linux/platform_device.h>
-#include <linux/gpio.h>
 #include <linux/miscdevice.h>
 #include <linux/earlysuspend.h>
-#include <linux/i2c/cypress_touchkey.h>
-#include "cypress_tkey_fw.h"
+#include <linux/i2c/cypress_touchkey_234.h>
 #include <linux/regulator/consumer.h>
 #include <asm/mach-types.h>
+#include <mach/msm8930-gpio.h>
+
+#include "cypress_tkey_fw.h"
+#include "next_fw_update.h"
 
 #ifdef CONFIG_LEDS_CLASS
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/leds.h>
 #endif
+
+/* use extra keys : recent key, home key */
+#undef USE_EXTRA_KEY
+/* use auto calibration command */
+#if defined(CONFIG_MACH_SERRANO)
+#define USE_AUTO_CAL
+#else
+#undef USE_AUTO_CAL
+#endif
+/* use brightness level */
+#undef USE_BRIGHTNESS_LEVEL
 
 #define CYPRESS_GEN		0X00
 #define CYPRESS_FW_VER		0X01
@@ -42,8 +53,6 @@
 #define CYPRESS_THRESHOLD	0X04
 #define CYPRESS_AUTO_CAL_FLG	0X05
 
-#define CYPRESS_IDAC_MENU	0X06
-#define CYPRESS_IDAC_BACK	0X07
 #define CYPRESS_LED_ON		0X10
 #define CYPRESS_LED_OFF		0X20
 #define CYPRESS_DATA_UPDATE	0X40
@@ -51,11 +60,6 @@
 #define CYPRESS_LED_CONTROL_ON	0X60
 #define CYPRESS_LED_CONTROL_OFF	0X70
 #define CYPRESS_SLEEP		0X80
-
-#if !defined (CONFIG_MACH_EXPRESS) && !defined (CONFIG_MACH_AEGIS2)
-static int vol_mv_level = 33;
-#endif
-
 
 #ifdef CONFIG_LEDS_CLASS
 #define TOUCHKEY_BACKLIGHT	"button-backlight"
@@ -76,17 +80,25 @@ struct cypress_touchkey_info {
 	struct cypress_touchkey_platform_data	*pdata;
 	struct input_dev			*input_dev;
 	struct early_suspend			early_suspend;
+	struct device	*dev;
 	char			phys[32];
 	unsigned char			keycode[NUM_OF_KEY];
 	u8			sensitivity[NUM_OF_KEY];
 	int			irq;
-	u8			fw_ver;
 	void (*power_onoff)(int);
 	int			touchkey_update_status;
+	u8			ic_vendor;
+/*
+* ic_vendor value == 0x00 : cypress IC,
+* ic_vendor value == 0xA1 : nextchip IC
+*/
+	u8	module_ver;
+	u8	ic_fw_ver;
 #ifdef CONFIG_LEDS_CLASS
 	struct led_classdev			leds;
 	enum led_brightness			brightness;
 	struct mutex			touchkey_led_mutex;
+	struct mutex			fw_lock;
 	struct workqueue_struct			*led_wq;
 	struct work_struct			led_work;
 #endif
@@ -113,12 +125,16 @@ static void cypress_touchkey_led_work(struct work_struct *work)
 	else
 		buf = CYPRESS_LED_ON;
 
+	dev_info(&info->client->dev, "%s: led : %s\n", __func__,
+				buf == CYPRESS_LED_ON ? "on" : "off");
+
 	mutex_lock(&info->touchkey_led_mutex);
 
 	ret = i2c_smbus_write_byte_data(info->client, CYPRESS_GEN, buf);
 	if (ret < 0) {
 		dev_err(&info->client->dev,
-			"[Touchkey] i2c write error [%d]\n", ret);
+			"%s: [Touchkey] i2c write error [%d]\n",
+			__func__, ret);
 		touchled_cmd_reversed = 1;
 	}
 
@@ -140,7 +156,9 @@ static void cypress_touchkey_brightness_set(struct led_classdev *led_cdev,
 }
 #endif
 
-#if !defined (CONFIG_MACH_EXPRESS) && !defined (CONFIG_MACH_AEGIS2)
+#ifdef USE_BRIGHTNESS_LEVEL
+static int vol_mv_level = 33;
+
 static void change_touch_key_led_voltage(int vol_mv)
 {
 	struct regulator *tled_regulator;
@@ -173,12 +191,13 @@ static ssize_t brightness_control(struct device *dev,
 	}
 	return size;
 }
+
 static ssize_t brightness_level_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	int count;
 
-	count = sprintf(buf, "%d\n", vol_mv_level);
+	count = snprintf(buf, 10, "%d\n", vol_mv_level);
 
 	printk(KERN_DEBUG "[TouchKey] Touch LED voltage = %d\n", vol_mv_level);
 	return count;
@@ -194,10 +213,16 @@ static irqreturn_t cypress_touchkey_interrupt(int irq, void *dev_id)
 	int ret;
 
 	ret = gpio_get_value(info->pdata->gpio_int);
-	if (ret) {
-		dev_err(&info->client->dev, "not real interrupt (%d).\n", ret);
-		goto out;
-	}
+	/*if (ret) {
+		if (gpio_get_value(GPIO_VIB_EN) && machine_is_EXPRESS()) {
+			dev_err(&info->client->dev,
+					"tkey intr && vibe on.\n");
+		} else {
+			dev_err(&info->client->dev,
+					"not real interrupt (%d).\n", ret);
+			goto out;
+		}
+	}*/
 
 #if defined(SEC_TOUCHKEY_VERBOSE_DEBUG)
 	ret = i2c_smbus_read_i2c_block_data(info->client,
@@ -226,17 +251,11 @@ static irqreturn_t cypress_touchkey_interrupt(int irq, void *dev_id)
 		goto out;
 	}
 
+	input_report_key(info->input_dev, info->keycode[code], press);
+	input_sync(info->input_dev);
 #if defined(SEC_TOUCHKEY_DEBUG)
 	TOUCHKEY_LOG(info->keycode[code], press);
 #endif
-
-	if (touch_is_pressed && press) {
-		dev_dbg(&info->client->dev,
-			"[TouchKey]touchkey pressed but don't send event because touch is pressed.\n");
-	} else {
-		input_report_key(info->input_dev, info->keycode[code], press);
-		input_sync(info->input_dev);
-	}
 
 out:
 	return IRQ_HANDLED;
@@ -247,15 +266,15 @@ static void cypress_touchkey_con_hw(struct cypress_touchkey_info *dev_info,
 {
 	struct cypress_touchkey_info *info =  dev_info;
 
-	gpio_set_value(info->pdata->gpio_led_en, flag ? 1 : 0);
+	info->pdata->touchkey_led_en(flag);
 
-#if defined(SEC_TOUCHKEY_DEBUG)
+ #if defined(SEC_TOUCHKEY_DEBUG)
 	dev_notice(&info->client->dev,
 			"%s : called with flag %d.\n", __func__, flag);
 #endif
 }
 
-
+#ifdef USE_AUTO_CAL
 static int cypress_touchkey_auto_cal(struct cypress_touchkey_info *dev_info)
 {
 	struct cypress_touchkey_info *info = dev_info;
@@ -280,7 +299,7 @@ static int cypress_touchkey_auto_cal(struct cypress_touchkey_info *dev_info)
 				"[TouchKey] data[0]=%x data[1]=%x data[2]=%x data[3]=%x\n",
 				data[0], data[1], data[2], data[3]);
 
-		msleep(50);
+		msleep(130);
 
 		ret = i2c_smbus_read_i2c_block_data(info->client,
 				CYPRESS_GEN, 6, data);
@@ -300,6 +319,7 @@ static int cypress_touchkey_auto_cal(struct cypress_touchkey_info *dev_info)
 
 	return count;
 }
+#endif
 
 static int cypress_touchkey_led_on(struct cypress_touchkey_info *dev_info)
 {
@@ -350,8 +370,12 @@ static ssize_t touch_version_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
 	int count;
+	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
 
-	count = snprintf(buf, 20, "0x%02x\n", BIN_FW_VERSION);
+	if (info->ic_vendor == 0xA1)
+		count = snprintf(buf, 20, "0x%02x\n", BIN_FW_VERSION_NEXT);
+	else
+		count = snprintf(buf, 20, "0x%02x\n", BIN_FW_VERSION);
 	return count;
 }
 
@@ -360,64 +384,83 @@ static ssize_t touchkey_firm_status_show(struct device *dev,
 {
 	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
 	int count = 0;
-	char buff[16] = {0};
 	dev_dbg(&info->client->dev, "[TouchKey] touchkey_update_status: %d\n",
 						info->touchkey_update_status);
 	if (info->touchkey_update_status == 0)
-		count = snprintf(buff, sizeof(buff), "PASS");
+		count = snprintf(buf, 20, "PASS\n");
 	else if (info->touchkey_update_status == 1)
-		count = snprintf(buff, sizeof(buff), "Downloading");
+		count = snprintf(buf, 20, "Downloading\n");
 	else if (info->touchkey_update_status == -1)
-		count = snprintf(buff, sizeof(buff), "Fail");
-	count = snprintf(buf, sizeof(buff), "%s\n", buff);
+		count = snprintf(buf, 20, "Fail\n");
 	return count;
 }
-
-static ssize_t touch_update_read(struct device *dev,
-				struct device_attribute *attr, char *buf)
-{
-	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
-	int count = 0;
-	char buff[16] = {0};
-
-	dev_dbg(&info->client->dev, "[TouchKey] touchkey_update_read: %d\n",
-						info->touchkey_update_status);
-	if (info->touchkey_update_status == 0)
-		count = snprintf(buff, sizeof(buff), "PASS\n");
-	else if (info->touchkey_update_status == 1)
-		count = snprintf(buff, sizeof(buff), "Downloading\n");
-	else if (info->touchkey_update_status == -1)
-		count = snprintf(buff, sizeof(buff), "Fail\n");
-	return count;
-}
-
 
 static ssize_t touch_update_write(struct device *dev,
 			 struct device_attribute *attr,
 			 const char *buf, size_t size)
 {
 	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
-	int count = 0;
+	int count = 0, ret = 0;
 	int retry = NUM_OF_RETRY_UPDATE;
 	char buff[16] = {0};
 	u8 data;
+
+#if defined(CONFIG_MACH_SERRANO_VZW)  || defined(CONFIG_MACH_SERRANO_USC)
+		if (info->module_ver != 0x1) {
+			dev_err(dev, "[TOUCHKEY] %x module does not support fw update!\n", info->module_ver);
+			return size;
+		}
+#endif
 
 	info->touchkey_update_status = 1;
 	dev_err(dev, "[TOUCHKEY] touch_update_write!\n");
 
 	disable_irq(info->irq);
+	mutex_lock(&info->fw_lock);
 
-	while (retry--) {
-		if (ISSP_main() == 0) {
+	if (info->ic_vendor == 0x00) {
+		while (retry--) {
+			if (ISSP_main() == 0) {
+				dev_err(&info->client->dev,
+					"[TOUCHKEY] Update success!\n");
+			#ifdef USE_AUTO_CAL
+				cypress_touchkey_auto_cal(info);
+			#endif
+				info->touchkey_update_status = 0;
+				count = 1;
+				break;
+			}
 			dev_err(&info->client->dev,
-				"[TOUCHKEY] Update success!\n");
-			info->touchkey_update_status = 0;
-			count = 1;
-			enable_irq(info->irq);
-			break;
+				"[TOUCHKEY] Touchkey_update failed... retry...\n");
 		}
-		dev_err(&info->client->dev,
-			"[TOUCHKEY] Touchkey_update failed... retry...\n");
+
+	} else {
+		printk(KERN_ERR "%s: This is nextchip Touchkey IC = %d\n",
+				__func__, ret);
+		while (retry--) {
+			info->power_onoff(0);
+			msleep(30);
+			info->power_onoff(1);
+
+			next_i2c_fw_update(info->client);
+
+			info->power_onoff(0);
+			msleep(30);
+			info->power_onoff(1);
+			msleep(200);
+
+			ret = i2c_smbus_read_byte_data(info->client,
+								CYPRESS_FW_VER);
+
+			if (ret == BIN_FW_VERSION_NEXT) {
+				info->touchkey_update_status = 0;
+				break;
+			} else {
+				dev_err(&info->client->dev,
+					"fw version is 0x%02x, retry!\n", ret);
+			}
+		}
+
 	}
 
 	if (retry <= 0) {
@@ -426,9 +469,10 @@ static ssize_t touch_update_write(struct device *dev,
 		count = 0;
 		dev_err(&info->client->dev, "[TOUCHKEY]Touchkey_update fail\n");
 		info->touchkey_update_status = -1;
-		return count;
 	}
 
+	enable_irq(info->irq);
+	mutex_unlock(&info->fw_lock);
 	msleep(500);
 
 	data = i2c_smbus_read_byte_data(info->client, CYPRESS_FW_VER);
@@ -470,6 +514,9 @@ static ssize_t touch_sensitivity_control(struct device *dev,
 	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
 	int ret;
 
+	if (info->touchkey_update_status)
+		return size;
+
 	ret = i2c_smbus_write_byte_data(info->client,
 			CYPRESS_GEN, CYPRESS_DATA_UPDATE);
 	if (ret < 0) {
@@ -489,6 +536,9 @@ static ssize_t touchkey_back_show(struct device *dev,
 	u8 data[2] = {0,};
 	int ret;
 
+	if (info->touchkey_update_status)
+		return snprintf(buf, 20, "%d\n", back_sensitivity);
+
 	ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_DIFF_BACK,
 		ARRAY_SIZE(data), data);
 	if (ret != ARRAY_SIZE(data)) {
@@ -505,6 +555,34 @@ static ssize_t touchkey_back_show(struct device *dev,
 
 }
 
+static ssize_t touchkey_menu_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
+	static u16 menu_sensitivity;
+	u8 data[2] = {0,};
+	int ret;
+
+	if (info->touchkey_update_status)
+		return snprintf(buf, 20, "%d\n", menu_sensitivity);
+
+	ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_DIFF_MENU,
+		ARRAY_SIZE(data), data);
+	if (ret != ARRAY_SIZE(data)) {
+		dev_err(&info->client->dev,
+			"[TouchKey] fail to read menu sensitivity.\n");
+		return ret;
+	}
+	menu_sensitivity = ((0x00FF & data[0])<<8) | data[1];
+
+	dev_dbg(&info->client->dev, "called %s , data : %d %d\n",
+			__func__, data[0], data[1]);
+	return snprintf(buf, 20, "%d\n", menu_sensitivity);
+
+
+}
+
+#ifdef USE_EXTRA_KEY
 static ssize_t touchkey_home_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -552,30 +630,7 @@ static ssize_t touchkey_recent_show(struct device *dev,
 	return snprintf(buf, 20, "%d\n", recent_sensitivity);
 
 }
-
-static ssize_t touchkey_menu_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
-	static u16 menu_sensitivity;
-	u8 data[2] = {0,};
-	int ret;
-
-	ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_DIFF_MENU,
-		ARRAY_SIZE(data), data);
-	if (ret != ARRAY_SIZE(data)) {
-		dev_err(&info->client->dev,
-			"[TouchKey] fail to read menu sensitivity.\n");
-		return ret;
-	}
-	menu_sensitivity = ((0x00FF & data[0])<<8) | data[1];
-
-	dev_dbg(&info->client->dev, "called %s , data : %d %d\n",
-			__func__, data[0], data[1]);
-	return snprintf(buf, 20, "%d\n", menu_sensitivity);
-
-
-}
+#endif
 
 static ssize_t touchkey_raw_data0_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -584,6 +639,9 @@ static ssize_t touchkey_raw_data0_show(struct device *dev,
 	static u16 raw_data0;
 	u8 data[2] = {0,};
 	int ret;
+
+	if (info->touchkey_update_status)
+		return snprintf(buf, 20, "%d\n", raw_data0);
 
 	ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_RAW_DATA_MENU,
 		ARRAY_SIZE(data), data);
@@ -609,6 +667,9 @@ static ssize_t touchkey_raw_data1_show(struct device *dev,
 	u8 data[2] = {0,};
 	int ret;
 
+	if (info->touchkey_update_status)
+		return snprintf(buf, 20, "%d\n", raw_data1);
+
 	ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_RAW_DATA_BACK,
 		ARRAY_SIZE(data), data);
 	if (ret != ARRAY_SIZE(data)) {
@@ -624,7 +685,7 @@ static ssize_t touchkey_raw_data1_show(struct device *dev,
 
 }
 
-
+#ifdef USE_EXTRA_KEY
 static ssize_t touchkey_raw_data2_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -672,7 +733,7 @@ static ssize_t touchkey_raw_data3_show(struct device *dev,
 	return snprintf(buf, 20, "%d\n", raw_data3);
 
 }
-
+#endif
 
 static ssize_t touchkey_idac0_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -718,6 +779,7 @@ static ssize_t touchkey_threshold_show(struct device *dev,
 	return snprintf(buf, 20, "%d\n", touchkey_threshold);
 }
 
+#ifdef USE_AUTO_CAL
 static ssize_t touch_autocal_testmode(struct device *dev,
 				 struct device_attribute *attr, const char *buf,
 				 size_t size)
@@ -742,7 +804,6 @@ static ssize_t touch_autocal_testmode(struct device *dev,
 	return count;
 }
 
-#if !defined (CONFIG_MACH_EXPRESS) && !defined (CONFIG_MACH_AEGIS2)
 static ssize_t autocalibration_enable(struct device *dev,
 				      struct device_attribute *attr,
 				      const char *buf, size_t size)
@@ -756,6 +817,7 @@ static ssize_t autocalibration_enable(struct device *dev,
 		cypress_touchkey_auto_cal(info);
 	return 0;
 }
+
 static ssize_t autocalibration_status(struct device *dev,
 				      struct device_attribute *attr, char *buf)
 {
@@ -768,46 +830,102 @@ static ssize_t autocalibration_status(struct device *dev,
 	ret = i2c_smbus_read_i2c_block_data(info->client,
 				CYPRESS_GEN, 6, data);
 	if ((data[5] & 0x80))
-		return sprintf(buf, "Enabled\n");
+		return snprintf(buf, 10, "Enabled\n");
 	else
-		return sprintf(buf, "Disabled\n");
+		return snprintf(buf, 10, "Disabled\n");
 }
 #endif
-
+static DEVICE_ATTR(touchkey_firm_update, S_IWUSR | S_IWGRP,
+				NULL, touch_update_write);
 static DEVICE_ATTR(touchkey_firm_update_status,
-		S_IRUGO | S_IWUSR | S_IWGRP, touchkey_firm_status_show, NULL);
+				S_IRUGO, touchkey_firm_status_show, NULL);
 static DEVICE_ATTR(touchkey_firm_version_panel, S_IRUGO,
 				touch_version_read, NULL);
 static DEVICE_ATTR(touchkey_firm_version_phone, S_IRUGO,
 				touch_version_show, NULL);
-static DEVICE_ATTR(touchkey_firm_update, S_IRUGO | S_IWUSR | S_IWGRP,
-				touch_update_read, touch_update_write);
 static DEVICE_ATTR(touchkey_brightness, S_IRUGO,
 				NULL, touch_led_control);
 static DEVICE_ATTR(touch_sensitivity, S_IRUGO | S_IWUSR | S_IWGRP,
 				NULL, touch_sensitivity_control);
 static DEVICE_ATTR(touchkey_back, S_IRUGO, touchkey_back_show, NULL);
-static DEVICE_ATTR(touchkey_home, S_IRUGO, touchkey_home_show, NULL);
-static DEVICE_ATTR(touchkey_recent, S_IRUGO, touchkey_recent_show, NULL);
 static DEVICE_ATTR(touchkey_menu, S_IRUGO, touchkey_menu_show, NULL);
 static DEVICE_ATTR(touchkey_raw_data0, S_IRUGO, touchkey_raw_data0_show, NULL);
 static DEVICE_ATTR(touchkey_raw_data1, S_IRUGO, touchkey_raw_data1_show, NULL);
+#ifdef USE_EXTRA_KEY
+static DEVICE_ATTR(touchkey_home, S_IRUGO, touchkey_home_show, NULL);
+static DEVICE_ATTR(touchkey_recent, S_IRUGO, touchkey_recent_show, NULL);
 static DEVICE_ATTR(touchkey_raw_data2, S_IRUGO, touchkey_raw_data2_show, NULL);
 static DEVICE_ATTR(touchkey_raw_data3, S_IRUGO, touchkey_raw_data3_show, NULL);
+#endif
 static DEVICE_ATTR(touchkey_idac0, S_IRUGO, touchkey_idac0_show, NULL);
 static DEVICE_ATTR(touchkey_idac1, S_IRUGO, touchkey_idac1_show, NULL);
 static DEVICE_ATTR(touchkey_threshold, S_IRUGO, touchkey_threshold_show, NULL);
+#ifdef USE_AUTO_CAL
 static DEVICE_ATTR(touchkey_autocal_start, S_IRUGO | S_IWUSR | S_IWGRP,
 				NULL, touch_autocal_testmode);
-#if !defined (CONFIG_MACH_EXPRESS) && !defined (CONFIG_MACH_AEGIS2)
 static DEVICE_ATTR(autocal_enable, S_IRUGO | S_IWUSR | S_IWGRP, NULL,
 		   autocalibration_enable);
 static DEVICE_ATTR(autocal_stat, S_IRUGO | S_IWUSR | S_IWGRP,
 		   autocalibration_status, NULL);
-
+#endif
+#ifdef USE_BRIGHTNESS_LEVEL
 static DEVICE_ATTR(touchkey_brightness_level, S_IRUGO | S_IWUSR | S_IWGRP,
 				brightness_level_show, brightness_control);
 #endif
+
+static struct attribute *touchkey_attributes[] = {
+	&dev_attr_touchkey_firm_update.attr,
+	&dev_attr_touchkey_firm_update_status.attr,
+	&dev_attr_touchkey_firm_version_phone.attr,
+	&dev_attr_touchkey_firm_version_panel.attr,
+	&dev_attr_touchkey_brightness.attr,
+	&dev_attr_touch_sensitivity.attr,
+	&dev_attr_touchkey_back.attr,
+	&dev_attr_touchkey_menu.attr,
+	&dev_attr_touchkey_raw_data0.attr,
+	&dev_attr_touchkey_raw_data1.attr,
+#ifdef USE_EXTRA_KEY
+	&dev_attr_touchkey_home.attr,
+	&dev_attr_touchkey_recent.attr,
+	&dev_attr_touchkey_raw_data2.attr,
+	&dev_attr_touchkey_raw_data3.attr,
+#endif
+	&dev_attr_touchkey_idac0.attr,
+	&dev_attr_touchkey_idac1.attr,
+	&dev_attr_touchkey_threshold.attr,
+#ifdef USE_AUTO_CAL
+	&dev_attr_touchkey_autocal_start.attr,
+	&dev_attr_autocal_enable.attr,
+	&dev_attr_autocal_stat.attr,
+#endif
+#ifdef USE_BRIGHTNESS_LEVEL
+	&dev_attr_touchkey_brightness_level.attr,
+#endif
+	NULL,
+};
+
+static struct attribute_group touchkey_attr_group = {
+	.attrs = touchkey_attributes,
+};
+
+static int cypress_touchkey_i2c_check(struct cypress_touchkey_info *info)
+{
+	int retry = NUM_OF_RETRY_UPDATE;
+	int ret = 0;
+	u8 data[3] = { 0, };
+
+	while (retry--) {
+		ret = i2c_smbus_read_i2c_block_data(info->client, CYPRESS_GEN, 4, data);
+		if (ret >= 0) {
+			info->ic_fw_ver = data[1];
+			info->module_ver = data[2];
+			dev_info(&info->client->dev, "Touchkey ic_fw_ver: 0x%02x, module_ver =0x%02x\n",
+				info->ic_fw_ver, info->module_ver);
+			break;
+		}
+	}
+	return ret;
+}
 
 static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)
@@ -823,8 +941,7 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 	int ic_fw_ver;
 	bool skip_fw_update;
 
-	struct device *sec_touchkey;
-
+	printk(KERN_ERR "%s start\n", __func__);
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C))
 		return -EIO;
 
@@ -873,16 +990,8 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, info);
 
-	ret = gpio_request(info->pdata->gpio_led_en, "gpio_touchkey_led");
-	if (ret < 0) {
-		dev_err(&client->dev, "gpio_touchkey_led gpio_request is failed\n");
-		goto err_gpio_request;
-	}
-	gpio_tlmm_config(GPIO_CFG(info->pdata->gpio_led_en, 0, GPIO_CFG_OUTPUT,
-				GPIO_CFG_NO_PULL, GPIO_CFG_2MA), 1);
-
 	cypress_touchkey_con_hw(info, true);
-	info->power_onoff(1);
+	msleep(30);
 
 	ret = request_threaded_irq(client->irq, NULL,
 			cypress_touchkey_interrupt,
@@ -893,6 +1002,64 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 		goto err_req_irq;
 	}
 
+	mutex_init(&info->fw_lock);
+
+	info->ic_vendor = i2c_smbus_read_byte_data(client, 0x12);
+	dev_err(&client->dev, "touchkey IC ver. 0x12: 0x%02x\n",
+				info->ic_vendor);
+
+	ret = cypress_touchkey_i2c_check(info);
+	if (ret < 0) {
+		retry = 1;
+		dev_err(&client->dev, "i2c_check failed.....\n");
+	}
+
+	skip_fw_update = pdata->skip_fw_update;
+	dev_err(&client->dev, "skip_fw_update = %d\n", skip_fw_update);
+
+#if defined(CONFIG_MACH_SERRANO_ATT)
+	if (!skip_fw_update && info->ic_fw_ver < BIN_FW_VERSION)
+#else
+	if (0/*!skip_fw_update && ic_fw_ver < BIN_FW_VERSION*/)
+#endif
+	{
+		dev_err(&client->dev, "[TOUCHKEY] touchkey_update Start!!\n");
+		disable_irq(client->irq);
+
+		while (retry--) {
+			if (ISSP_main() == 0) {
+				printk(KERN_ERR "[TOUCHKEY] Update success!\n");
+				enable_irq(client->irq);
+				break;
+			}
+			info->power_onoff(0);
+			msleep(70);
+			info->power_onoff(1);
+			msleep(50);
+			dev_err(&client->dev,
+				"[TouchKey] Touchkey_update failed... retry...%d\n",retry);
+		}
+
+		if (retry <= 0) {
+			cypress_touchkey_con_hw(info, false);
+			info->power_onoff(0);
+			dev_err(&client->dev, "[TouchKey] tkey driver unload\n");
+			goto err_fw_update;
+		} else {
+			msleep(500);
+			ic_fw_ver = i2c_smbus_read_byte_data(info->client,
+					CYPRESS_FW_VER);
+			dev_err(&client->dev,
+				"[TouchKey] %s : FW Ver 0x%02x\n", __func__, ic_fw_ver);
+		}
+	} else {
+		dev_err(&client->dev, "[TouchKey] FW update does not need!\n");
+	}
+
+#ifdef USE_AUTO_CAL
+	cypress_touchkey_auto_cal(info);
+#endif
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 		info->early_suspend.level =
 				EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
@@ -901,199 +1068,63 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 		register_early_suspend(&info->early_suspend);
 #endif /* CONFIG_HAS_EARLYSUSPEND */
 
+	info->dev = device_create(sec_class, NULL, 0, NULL, "sec_touchkey");
+
+	ret = IS_ERR(info->dev);
+	if (ret) {
+		dev_err(&client->dev, "Failed to create device(info->dev)!\n");
+		goto err_device_create;
+	} else {
+		dev_set_drvdata(info->dev, info);
+		ret = sysfs_create_group(&info->dev->kobj,
+					&touchkey_attr_group);
+		if (ret) {
+			dev_err(&client->dev, "Failed to create sysfs group\n");
+			goto err_sysfs;
+		}
+	}
 
 #ifdef CONFIG_LEDS_CLASS
-	mutex_init(&info->touchkey_led_mutex);
-	info->led_wq = create_singlethread_workqueue("cypress_touchkey");
-	INIT_WORK(&info->led_work, cypress_touchkey_led_work);
+		mutex_init(&info->touchkey_led_mutex);
+		info->led_wq = create_singlethread_workqueue("cypress_touchkey");
+		if (!info->led_wq)
+			dev_err(&client->dev, "fail to create led workquewe.\n");
+		else
+			INIT_WORK(&info->led_work, cypress_touchkey_led_work);
 
-	info->leds.name = TOUCHKEY_BACKLIGHT;
-	info->leds.brightness = LED_FULL;
-	info->leds.max_brightness = LED_FULL;
-	info->leds.brightness_set = cypress_touchkey_brightness_set;
+		info->leds.name = TOUCHKEY_BACKLIGHT;
+		info->leds.brightness = LED_FULL;
+		info->leds.max_brightness = LED_FULL;
+		info->leds.brightness_set = cypress_touchkey_brightness_set;
 
-	ret = led_classdev_register(&client->dev, &info->leds);
-	if (ret)
-		goto err_req_irq;
+		ret = led_classdev_register(&client->dev, &info->leds);
+		if (ret)
+			goto err_led_class_dev;
 #endif
 
-	msleep(20);
-	ic_fw_ver = i2c_smbus_read_byte_data(client, CYPRESS_FW_VER);
-	dev_err(&client->dev, "Touchkey FW Version: 0x%02x\n", ic_fw_ver);
-	skip_fw_update = pdata->skip_fw_update;
-	dev_err(&client->dev, "skip_fw_update = %d\n", skip_fw_update);
-
-	if (0/*!skip_fw_update && ic_fw_ver < BIN_FW_VERSION*/) {
-		dev_err(&client->dev, "[TOUCHKEY] touchkey_update Start!!\n");
-		disable_irq(client->irq);
-
-		while (retry--) {
-			if (ISSP_main() == 0) {
-				dev_err(&client->dev, "[TOUCHKEY] Update success!\n");
-				enable_irq(client->irq);
-				break;
-			}
-			dev_err(&client->dev,
-				"[TOUCHKEY] Touchkey_update failed... retry...\n");
-		}
-
-		if (retry <= 0) {
-			cypress_touchkey_con_hw(info, false);
-			msleep(300);
-			dev_err(&client->dev, "[TOUCHKEY]Touchkey_update fail\n");
-		}
-
-		msleep(500);
-
-		ic_fw_ver = i2c_smbus_read_byte_data(info->client,
-				CYPRESS_FW_VER);
-		dev_err(&client->dev,
-			"[TouchKey] %s : FW Ver 0x%02x\n", __func__, ic_fw_ver);
-	} else {
-		dev_err(&client->dev, "[TouchKey] FW update does not need!\n");
-	}
-
-	sec_touchkey = device_create(sec_class, NULL, 0, NULL, "sec_touchkey");
-	if (IS_ERR(sec_touchkey)) {
-		pr_err("Failed to create device(sec_touchkey)!\n");
-		goto err_sysfs;
-	}
-	dev_set_drvdata(sec_touchkey, info);
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_firm_update_status) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_firm_update_status.attr.name);
-		goto err_sysfs;
-	}
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_firm_update) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_firm_update.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_firm_version_panel) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_firm_version_panel.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_firm_version_phone) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_firm_version_phone.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_brightness) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_brightness.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_menu) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_menu.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_back) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_back.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_raw_data0) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_raw_data0.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_raw_data1) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_raw_data1.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey, &dev_attr_touchkey_idac0) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_idac0.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey, &dev_attr_touchkey_idac1) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_idac1.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_threshold) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_threshold.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey,
-			&dev_attr_touchkey_autocal_start) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touchkey_autocal_start.attr.name);
-		goto err_sysfs;
-	}
-
-	if (device_create_file(sec_touchkey, &dev_attr_touch_sensitivity) < 0) {
-		pr_err("Failed to create device file(%s)!\n",
-			dev_attr_touch_sensitivity.attr.name);
-		goto err_sysfs;
-	}
-	if (machine_is_AEGIS2()) {
-		if (device_create_file(sec_touchkey,
-				&dev_attr_touchkey_raw_data2) < 0) {
-			pr_err("Failed to create device file(%s)!\n",
-				dev_attr_touchkey_raw_data2.attr.name);
-			goto err_sysfs;
-		}
-		if (device_create_file(sec_touchkey,
-				&dev_attr_touchkey_raw_data3) < 0) {
-			pr_err("Failed to create device file(%s)!\n",
-				dev_attr_touchkey_raw_data3.attr.name);
-			goto err_sysfs;
-		}
-
-		if (device_create_file(sec_touchkey,
-				&dev_attr_touchkey_home) < 0) {
-			pr_err("Failed to create device file(%s)!\n",
-				dev_attr_touchkey_home.attr.name);
-			goto err_sysfs;
-		}
-		if (device_create_file(sec_touchkey,
-				&dev_attr_touchkey_recent) < 0) {
-			pr_err("Failed to create device file(%s)!\n",
-				dev_attr_touchkey_recent.attr.name);
-			goto err_sysfs;
-		}
-	}
-
+	printk(KERN_ERR "%s: TKEY probe done.\n", __func__);
 	return 0;
 
-err_req_irq:
-	gpio_free(info->pdata->gpio_led_en);
-err_gpio_request:
+#ifdef CONFIG_LEDS_CLASS
+err_led_class_dev:
+	if (info->led_wq)
+		destroy_workqueue(info->led_wq);
 	mutex_destroy(&info->touchkey_led_mutex);
+#endif
+	sysfs_remove_group(&info->dev->kobj, &touchkey_attr_group);
+err_sysfs:
+err_device_create:
+err_fw_update:
+	mutex_destroy(&info->fw_lock);
+	if (info->irq >= 0)
+		free_irq(info->irq, info);
+err_req_irq:
 	input_unregister_device(input_dev);
 err_reg_input_dev:
 	input_free_device(input_dev);
 	input_dev = NULL;
 err_input_dev_alloc:
 	kfree(info);
-err_sysfs:
 	return -ENXIO;
 err_mem_alloc:
 	return ret;
@@ -1104,7 +1135,6 @@ static int __devexit cypress_touchkey_remove(struct i2c_client *client)
 	struct cypress_touchkey_info *info = i2c_get_clientdata(client);
 	if (info->irq >= 0)
 		free_irq(info->irq, info);
-	gpio_free(info->pdata->gpio_led_en);
 	mutex_destroy(&info->touchkey_led_mutex);
 	led_classdev_unregister(&info->leds);
 	input_unregister_device(info->input_dev);
@@ -1133,14 +1163,20 @@ static int cypress_touchkey_resume(struct device *dev)
 	int ret = 0;
 	info->power_onoff(1);
 	cypress_touchkey_con_hw(info, true);
-	msleep(100);
+	msleep(300);
 	if (touchled_cmd_reversed) {
 		touchled_cmd_reversed = 0;
-		i2c_smbus_write_byte_data(info->client,
+		ret = i2c_smbus_write_byte_data(info->client,
 				CYPRESS_GEN, touchkey_led_status);
-		printk(KERN_DEBUG "LED returned on\n");
+		if (ret < 0)
+			printk(KERN_ERR "cypress: resume LED on fail %d\n",
+					ret);
+		else
+			printk(KERN_ERR "cypress: LED returned on\n");
 	}
-
+#ifdef USE_AUTO_CAL
+	cypress_touchkey_auto_cal(info);
+#endif
 	enable_irq(info->irq);
 
 	return ret;
@@ -1190,13 +1226,15 @@ struct i2c_driver cypress_touchkey_driver = {
 
 static int __init cypress_touchkey_init(void)
 {
-	int ret = 0;
 
+	int ret = 0;
+	printk(KERN_ERR "%s: init\n", __func__);
 	ret = i2c_add_driver(&cypress_touchkey_driver);
 	if (ret) {
-		pr_err("[TouchKey] cypress touch keypad registration failed. ret= %d\n",
+		printk(KERN_ERR "cypress touch keypad registration failed. ret= %d\n",
 			ret);
 	}
+	printk(KERN_ERR "%s: init done %d\n", __func__, ret);
 
 	return ret;
 }

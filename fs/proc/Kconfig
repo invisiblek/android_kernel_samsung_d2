@@ -70,6 +70,6 @@ config PROC_PAGE_MONITOR
 
 config PROC_AVC
 	bool "support (/proc/avc_msg)"
- 	default n
- 	help
+	default n
+	help
 	  support logging audit avc message

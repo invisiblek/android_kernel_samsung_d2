@@ -877,7 +877,7 @@ static int generate_gray_scale(struct SMART_DIM *pSmart)
 				pr_info("%s end\n", __func__);
 			} else {
 				pr_err("%s fail cnt:%d\n", __func__, cnt);
-				return -1;
+				return -EINVAL;
 			}
 		}
 
@@ -960,7 +960,7 @@ static int searching_function(long long candela, int *index, int gamma_curve)
 	}
 
 	if (*index == -1)
-		return -1;
+		return -EINVAL;
 	else
 		return 0;
 }
@@ -1204,8 +1204,6 @@ static void gamma_init(struct SMART_DIM *pSmart, char *str, int size)
 
 }
 #endif
-#endif
-
 static void pure_gamma_init(struct SMART_DIM *pSmart, char *str, int size)
 {
 	long long candela_level[S6E8AA0X01_TABLE_MAX] = {-1, };
@@ -1295,6 +1293,7 @@ static void pure_gamma_init(struct SMART_DIM *pSmart, char *str, int size)
 	str[23] = level_255_temp & 0xff;
 
 }
+#endif
 
 static void set_max_lux_table(void)
 {
@@ -1376,79 +1375,7 @@ static void gamma_cell_determine(int ldi_revision)
 {
 	pr_info("%s ldi_revision:%d", __func__, ldi_revision);
 
-#if defined(CONFIG_MACH_STRETTO) || defined(CONFIG_MACH_SUPERIORLTE_SKT)
-	if (ldi_revision == 0xAE) {
-		V1_300CD_R = V1_300CD_R_AE;
-		V1_300CD_G = V1_300CD_G_AE;
-		V1_300CD_B = V1_300CD_B_AE;
-
-		V15_300CD_R = V15_300CD_R_AE;
-		V15_300CD_G = V15_300CD_G_AE;
-		V15_300CD_B = V15_300CD_B_AE;
-
-		V35_300CD_R = V35_300CD_R_AE;
-		V35_300CD_G = V35_300CD_G_AE;
-		V35_300CD_B = V35_300CD_B_AE;
-
-		V59_300CD_R = V59_300CD_R_AE;
-		V59_300CD_G = V59_300CD_G_AE;
-		V59_300CD_B = V59_300CD_B_AE;
-
-		V87_300CD_R = V87_300CD_R_AE;
-		V87_300CD_G = V87_300CD_G_AE;
-		V87_300CD_B = V87_300CD_B_AE;
-
-		V171_300CD_R = V171_300CD_R_AE;
-		V171_300CD_G = V171_300CD_G_AE;
-		V171_300CD_B = V171_300CD_B_AE;
-
-		V255_300CD_R_MSB = V255_300CD_R_MSB_AE;
-		V255_300CD_R_LSB = V255_300CD_R_LSB_AE;
-
-		V255_300CD_G_MSB = V255_300CD_G_MSB_AE;
-		V255_300CD_G_LSB = V255_300CD_G_LSB_AE;
-
-		V255_300CD_B_MSB = V255_300CD_B_MSB_AE;
-		V255_300CD_B_LSB = V255_300CD_B_LSB_AE;
-
-		return;
-	}
-#endif
-	if (ldi_revision == 0x60) {
-		V1_300CD_R = V1_300CD_R_60;
-		V1_300CD_G = V1_300CD_G_60;
-		V1_300CD_B = V1_300CD_B_60;
-
-		V15_300CD_R = V15_300CD_R_60;
-		V15_300CD_G = V15_300CD_G_60;
-		V15_300CD_B = V15_300CD_B_60;
-
-		V35_300CD_R = V35_300CD_R_60;
-		V35_300CD_G = V35_300CD_G_60;
-		V35_300CD_B = V35_300CD_B_60;
-
-		V59_300CD_R = V59_300CD_R_60;
-		V59_300CD_G = V59_300CD_G_60;
-		V59_300CD_B = V59_300CD_B_60;
-
-		V87_300CD_R = V87_300CD_R_60;
-		V87_300CD_G = V87_300CD_G_60;
-		V87_300CD_B = V87_300CD_B_60;
-
-		V171_300CD_R = V171_300CD_R_60;
-		V171_300CD_G = V171_300CD_G_60;
-		V171_300CD_B = V171_300CD_B_60;
-
-		V255_300CD_R_MSB = V255_300CD_R_MSB_60;
-		V255_300CD_R_LSB = V255_300CD_R_LSB_60;
-
-		V255_300CD_G_MSB = V255_300CD_G_MSB_60;
-		V255_300CD_G_LSB = V255_300CD_G_LSB_60;
-
-		V255_300CD_B_MSB = V255_300CD_B_MSB_60;
-		V255_300CD_B_LSB = V255_300CD_B_LSB_60;
-
-	} else if (ldi_revision == 0x40) {
+	if (ldi_revision == 0x40) {
 		V1_300CD_R = V1_300CD_R_40;
 		V1_300CD_G = V1_300CD_G_40;
 		V1_300CD_B = V1_300CD_B_40;
@@ -1539,7 +1466,7 @@ int smart_dimming_init(struct SMART_DIM *psmart)
 
 	if (generate_gray_scale(psmart)) {
 		pr_info(KERN_ERR "lcd smart dimming fail generate_gray_scale\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	/*Generating lux_table*/
@@ -1549,15 +1476,9 @@ int smart_dimming_init(struct SMART_DIM *psmart)
 		/* To make lux table index*/
 		psmart->gen_table[lux_loop].lux = psmart->plux_table[lux_loop];
 
-#ifdef AID_OPERATION_4_8_INCH
 		gamma_init(psmart,
 			(char *)(&(psmart->gen_table[lux_loop].gamma_setting)),
 			GAMMA_SET_MAX);
-#else
-		pure_gamma_init(psmart,
-			(char *)(&(psmart->gen_table[lux_loop].gamma_setting)),
-			GAMMA_SET_MAX);
-#endif
 	}
 
 	/* set 300CD max gamma table */

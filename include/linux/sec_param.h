@@ -8,34 +8,46 @@
  * published by the Free Software Foundation.
  */
 
-typedef struct _sec_param_data {
+struct sec_param_data {
 	unsigned int debuglevel;
 	unsigned int uartsel;
 	unsigned int rory_control;
 	unsigned int movinand_checksum_done;
 	unsigned int movinand_checksum_pass;
+	unsigned int cp_debuglevel;
+#ifdef CONFIG_RTC_AUTO_PWRON_PARAM
+	unsigned int boot_alarm_set;
+	unsigned int boot_alarm_value_l;
+	unsigned int boot_alarm_value_h;
+#endif
 #if defined(CONFIG_MACH_APEXQ) || defined(CONFIG_MACH_AEGIS2)
 	unsigned int slideCount;
 #endif
-#ifdef CONFIG_SEC_SSR_DEBUG_LEVEL_CHK
-	unsigned int cp_debuglevel;
+#ifdef CONFIG_SEC_MONITOR_BATTERY_REMOVAL
+	unsigned int normal_poweroff;
 #endif
-} sec_param_data;
+} ;
 
-typedef enum {
+enum sec_param_index {
 	param_index_debuglevel,
 	param_index_uartsel,
 	param_rory_control,
 	param_index_movinand_checksum_done,
 	param_index_movinand_checksum_pass,
+	param_index_cp_debuglevel,
+#ifdef CONFIG_RTC_AUTO_PWRON_PARAM
+	param_index_boot_alarm_set,
+	param_index_boot_alarm_value_l,
+	param_index_boot_alarm_value_h,
+#endif
 #if defined(CONFIG_MACH_APEXQ) || defined(CONFIG_MACH_AEGIS2)
 	param_slideCount,
 #endif
-#ifdef CONFIG_SEC_SSR_DEBUG_LEVEL_CHK
-	param_cp_debuglevel,
+#ifdef CONFIG_SEC_MONITOR_BATTERY_REMOVAL
+	param_index_normal_poweroff,
 #endif
-} sec_param_index;
+} ;
 
 extern bool sec_open_param(void);
-extern bool sec_get_param(sec_param_index index, void *value);
-extern bool sec_set_param(sec_param_index index, void *value);
+extern bool sec_get_param(enum sec_param_index index, void *value);
+extern bool sec_set_param(enum sec_param_index index, void *value);
