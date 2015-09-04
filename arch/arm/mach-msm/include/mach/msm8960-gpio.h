@@ -63,5 +63,6 @@
 #include <mach/stretto-gpio.h>
 #elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
 #include <mach/superiorlte_skt-gpio.h>
-
+#elif defined(CONFIG_MACH_JF)
+#include <mach/apq8064-gpio.h>
 #endif

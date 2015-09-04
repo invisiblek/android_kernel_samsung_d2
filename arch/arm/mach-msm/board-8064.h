@@ -156,4 +156,11 @@ enum {
 
 extern struct msm_rtb_platform_data apq8064_rtb_pdata;
 extern struct msm_cache_dump_platform_data apq8064_cache_dump_pdata;
+
+#ifdef CONFIG_BCM4335
+int brcm_wlan_init(void);
+int brcm_wifi_status_register(
+                   void (*callback)(int card_present, void *dev_id), void *dev_id);
+unsigned int brcm_wifi_status(struct device *dev);
+#endif
 #endif

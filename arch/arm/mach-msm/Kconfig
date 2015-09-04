@@ -954,6 +954,14 @@ config MACH_ESPRESSO_VZW
         bool "MSM8960 Samsung ESPRESSO_VZW"
         help
           Support for the Samsung Espresso(Verizon) device.
+
+config MACH_JF
+	depends on ARCH_APQ8064
+	default n
+	bool "APQ8064 Samsung JF"
+	help
+	  Support for the Samsung JF device.
+
 endmenu
 
 source "arch/arm/mach-msm/lge/Kconfig"
@@ -2284,6 +2292,12 @@ config BT_BCM4334
         default n
         help
           Adds BCM4334 RFKILL driver for Broadcom BCM4334 chipset
+
+config BT_BCM4335
+        bool "Enable BCM4335 driver"
+        default n
+        help
+          Adds BCM4335 RFKILL driver for Broadcom BCM4335 chipset
 
 config MSM_FAKE_BATTERY
 		depends on POWER_SUPPLY
